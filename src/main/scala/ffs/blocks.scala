@@ -17,18 +17,20 @@ sealed abstract class Block {
   * The first block in the file.
   * Contains some information about the file format and addresses of "layout blocks".
   *
-  * @param rootBlockAddresses block addresses of layout blocks
+  * @param blockCount number of blocks in the fake file system
+  * @param rootBlockAddresses block addresses of directory root
   */
-case class HeaderBlock(rootBlockAddresses: Vector[Int]) extends Block {
+case class HeaderBlock(blockCount: Int, rootBlockAddresses: Vector[Int]) extends Block {
 
   import blocks._
 
   override def toBytes = {
     val b = buffer()
-    b.putShort(magic) // 2b
-    b.put(version) // 1b
+    b.putShort(magic) // 2B
+    b.put(version) // 1B
+    b.putInt(blockCount) // 4B
+    // block count determines how many Bitmap Blocks are allocated in the FFS: blockCount/(8*blockSize)
 
-    // the root block gets up to 127 directory blocks
     // TODO handle too many root blocks errors
     b.put(rootBlockAddresses.size.toByte) // 1b
 
