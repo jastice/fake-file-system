@@ -8,6 +8,8 @@ sealed abstract class Block {
 
   /** Allocate a buffer with standard size for the FFS format. */
   def buffer(): ByteBuffer = ByteBuffer.allocate(blocks.blockSize)
+
+  /** Byte representation of this block. */
   def toBytes: Array[Byte]
 }
 
@@ -42,7 +44,9 @@ case class HeaderBlock(rootBlockAddresses: Vector[Int]) extends Block {
 /** A file block represents either a regular file with data or a directory. */
 case class FileBlock(dataBlocks: Vector[Block]) extends Block {
   override def toBytes = {
+    // parent directory block (4B)
     // file size in bytes (4B)
+    // file block addresses (4B * size/512)
 
     ???
   }
@@ -51,18 +55,17 @@ case class FileBlock(dataBlocks: Vector[Block]) extends Block {
 /** A directory block contains data about files and directories within a directory. */
 case class DirectoryBlock(files: Vector[Entry]) extends Block {
   override def toBytes = {
-    //
+
     // sequence of files and dirs
+    // 0-padded at end: 0 name/address means that there's nothing there!
     // dirs:
-      // flags (1B)
+      // flags (4B)
       // dir name (8B)
       // dir block address (4B)
     // files:
-      // flags (1B)
+      // flags (4B)
       // file name (8B)
       // file block address (4B)
-      // file data total size in bytes (4B)
-      // file data block addresses (2B * fileSize/512)
 
     val b = buffer()
 
@@ -97,12 +100,11 @@ object blocks {
     val deleted: Int = 0x02
   }
 
-  def flagByte(fDir: Boolean, fDeleted: Boolean): Byte = {
+  def flagByte(fDir: Boolean, fDeleted: Boolean): Int = {
     import flags._
-    (
-      (if (fDir) dir else 0) |
-      (if (fDeleted) deleted else 0)
-    ).toByte
+
+    (if (fDir) dir else 0) |
+    (if (fDeleted) deleted else 0)
   }
 
   /** The block size in bytes. */
