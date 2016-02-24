@@ -14,5 +14,5 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.1.3"
 )
 
-initialCommands := "import org.gestern.fakefilesystem._"
+initialCommands := "import ffs._"
 

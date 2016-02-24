@@ -7,7 +7,7 @@ sealed abstract class FileNode {
   val name: String
 
   /** Index block of this file. */
-  val block: FileBlock
+  val block: Block
 }
 
 case class File(name: String, size: Int, block: FileBlock) extends FileNode
