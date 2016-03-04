@@ -1,18 +1,21 @@
 package ffs
 
-import ffs.constants._
+import constants.blockSize
 import FreeMap._
 
-class FreeMap(blocks: Vector[DataBlock], size: Int) {
+/**
+  * Map of free blocks in filesystem.
+  * @param blocks blocks comprising the FreeMap
+  * @param size Size of file system in blocks
+  */
+class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
 
   private val firstBlockAddress = 1
   private val blockBits = blockSize*8
 
-  private var free: Int = countFree
+  private[ffs] var free: Int = countFree
 
-  private def blockAddress(address: Int): (Int,Int) = (address / blockBits, address % blockBits)
-
-  private def countFree: Int = {
+  private[ffs] def countFree: Int = {
     val oneBits = blocks.foldLeft(0) { (sum,block) =>
       sum + block.data.foldLeft(0) { (s,b) => s + num1Bits(b)}
     }
@@ -24,12 +27,13 @@ class FreeMap(blocks: Vector[DataBlock], size: Int) {
     * @param bit bit to set
     * @return whether the bit was set in this operation (true) or already set (false)
     */
-  private def setBit(block: DataBlock, bit: Int): Boolean = {
-    val byteAddress = bit >> 3
-    val b = 1 << (bit & 0x7)
-    val byt = block.data(byteAddress)
-    block.data.update(byteAddress, (b | byt).toByte)
-    (byt & b) > 0
+  private[ffs] def setBit(block: DataBlock, bit: Int): Boolean = {
+    val byteAddress = bit >> 3 // div 8 :)
+    val mask = 1 << (bit & 0x7)
+    val byte = block.data(byteAddress)
+    val newByte = (mask | byte).toByte
+    block.data.update(byteAddress, newByte)
+    newByte != byte
   }
 
   /**
@@ -38,16 +42,19 @@ class FreeMap(blocks: Vector[DataBlock], size: Int) {
     * @param bit
     * @return whether bit was cleared (true) or already clear (false)
     */
-  private def clearBit(block: DataBlock, bit: Int): Boolean = {
+  private[ffs] def clearBit(block: DataBlock, bit: Int): Boolean = {
     val byteAddress = bit >> 3
-    val b = ~(1 << (bit & 0x7))
-    val byt = block.data(byteAddress)
-    block.data.update(byteAddress, (b & byt).toByte)
-    (byt & b) > 0
+    val mask = ~(1 << (bit & 0x7))
+    val byte = block.data(byteAddress)
+    val newByte = (mask & byte).toByte
+    block.data.update(byteAddress, newByte)
+    newByte != byte
   }
 
-  /** Find `blocks` free blocks and mark them as blocked.
-    * If not enough free blocks are available, return an empty vector. */
+  /** Find `blocks` free blocks and mark them as taken.
+    * If not enough free blocks are available, return an empty vector.
+    * Only this method should be used to reserve blocks.
+    */
   def takeBlocks(n: Int): Vector[Int] = {
     if (free < n) Vector.empty
     else {
@@ -59,10 +66,11 @@ class FreeMap(blocks: Vector[DataBlock], size: Int) {
       while(b < blocks.size) {
         val data = blocks(b).data
         val blockZero = blockBits*b
+        // the last block may not be completely filled
         var i = 0
-        while (blockZero + i < size && collected < n) {
-          val byt = data(i)
-          val added = (if (byt != 0xFF.toByte) freeBits(byt) else Vector.empty).map{ k => blockZero + k }
+        while (blockZero + i < blockSize && collected < n) {
+          val byte = data(i)
+          val added = (if (byte != 0xFF.toByte) freeBits(byte) else Vector.empty).map{ k => blockZero + i*8 + k }
           result ++= added
           collected += added.size
           i += 1
@@ -70,20 +78,20 @@ class FreeMap(blocks: Vector[DataBlock], size: Int) {
         b += 1
       }
 
-      result.take(n)
+      val resultBlocks = result.take(n)
+      resultBlocks.foreach { blk =>
+        val (blockAddr,addrInBlock) = blockAddress(blk)
+        setBit(blocks(blockAddr),addrInBlock)
+      }
+      free -= n
+      resultBlocks
     }
   }
 
-  /** Free bit indexes in a byte. */
-  def freeBits(b: Byte): Vector[Int] = {
-    (0 until 8).filter { i =>
-      val m = 1 << i
-      (m & b) > 1
-    }.toVector
-  }
 
   /**
     * Free the blocks with given block addresses. They are free for writing again.
+    * Only this method should be used to free blocks.
     *
     * @return updated block index and block
     */
@@ -95,12 +103,12 @@ class FreeMap(blocks: Vector[DataBlock], size: Int) {
       if (cleared) Vector((firstBlockAddress+blockAddr, block)) else Vector.empty
     }
 
-    free -= freed.size
+    free += freed.size
     freed
   }
 
-  def addressedBlocks: Vector[(Int,DataBlock)] =
-    blocks.zipWithIndex.map{ case (block,addr) => (firstBlockAddress+addr, block)}
+  private[ffs] def addressedBlocks: Vector[(Int,DataBlock)] =
+    blocks.zipWithIndex.map{ case (block,addr) => (firstBlockAddress+addr, block) }
 }
 
 
@@ -108,10 +116,11 @@ object FreeMap {
 
   /**
     * Initialize a FreeMap for given size of blocks
+    * @param size size of file system in blocks
     */
   def apply(size: Int) = {
 
-    val nFreeMapBlocks = common.ceilingDiv(size, blockSize * 8)
+    val nFreeMapBlocks = common.ceilingDiv(size, blockBits)
 
     val freeMapBlocks = Vector.fill(nFreeMapBlocks)(DataBlock(Array.ofDim(blockSize)))
     val reservedBlocks = 1 + freeMapBlocks.size // header block + FreeMap itself
@@ -122,20 +131,25 @@ object FreeMap {
     freeMap
   }
 
+  private val blockBits = blockSize * 8
+
+  private[ffs] def blockAddress(address: Int): (Int,Int) = (address / blockBits, address % blockBits)
+
+  /** Free bit indexes in a byte.
+    * index 0 is most significant digit.
+    */
+  private[ffs] def freeBits(b: Byte): Vector[Int] = {
+    (0 until 8).filter { i =>
+      ((0x80 >> i) & b) == 0
+    }.toVector
+  }
 
   /**
-    * Count 1-bits in an int
-    * via http://codegolf.stackexchange.com/questions/4588/compute-number-of-1-bits-in-a-binary-representation-of-a-number
-    * @param x
-    * @return
+    * Count 1-bits in a byte.
     */
-  private def num1Bits(x: Int) = {
-    var i = x
-    i = (i & 0x55555555) + ((i>> 1) & 0x55555555)
-    i = (i & 0x33333333) + ((i>> 2) & 0x33333333)
-    i = (i & 0x0f0f0f0f) + ((i>> 4) & 0x0f0f0f0f)
-    i = (i & 0x00ff00ff) + ((i>> 8) & 0x00ff00ff)
-    (i & 0x0000ffff) + ((i>>16) & 0x0000ffff)
+  private[ffs] def num1Bits(b: Byte): Int = {
+    (1 & b)        + (1 & (b >> 1)) + (1 & (b >> 2)) + (1 & (b >> 3)) +
+    (1 & (b >> 4)) + (1 & (b >> 5)) + (1 & (b >> 6)) + (1 & (b >> 7))
   }
 
 }
