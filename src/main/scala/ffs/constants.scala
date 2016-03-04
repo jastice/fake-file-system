@@ -7,7 +7,7 @@ import java.nio.charset.Charset
   */
 object constants {
 
-  /** The block size in bytes. */
+  /** The block size in bytes in the file system. */
   val blockSize: Int = 512
 
   /** Marker for FFS format. */

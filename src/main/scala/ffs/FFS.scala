@@ -70,6 +70,8 @@ object FFS {
   def initialize(physical: java.io.File, size: Int): FFS = {
     import constants.blockSize, common.ceilingDiv
 
+    physical.createNewFile()
+
     val nBlocks = ceilingDiv(size, blockSize)
     val headerBlock = HeaderBlock(nBlocks,Vector(2))
 
