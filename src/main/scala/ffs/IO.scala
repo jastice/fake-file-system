@@ -1,27 +1,40 @@
 package ffs
 
-import java.nio.file.{Path => NioPath}
-import java.nio.file.Files
-import java.nio.file.StandardOpenOption.{READ,WRITE}
+import java.io.{File => JFile, RandomAccessFile}
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel.MapMode
+import constants.BLOCKSIZE
 
-class IO(file: NioPath) {
+class IO(file: JFile) {
 
-  val channel = Files.newByteChannel(file, READ, WRITE)
+  val raf = new RandomAccessFile(file,"rw")
+  val channel = raf.getChannel
+  val lock = channel.lock() // TODO do we have to do anything more to observe locks?
 
+  /** Write multiple blocks at respective block addresses. */
   def writeBlocks(locBlocks: Vector[(Int,Block)]) = {
     locBlocks.foreach { case (address,block) =>
       writeBlock(address, block)
     }
   }
 
+  /** Write a Block to the given block address. */
   def writeBlock(address: Int, block: Block) = {
-    val byteAddress = address * constants.blockSize
+    val byteAddress = address * BLOCKSIZE
     val written = channel.position(byteAddress).write(block.toBytes)
-    assert(written == constants.blockSize)
+    assert(written == BLOCKSIZE)
   }
 
-  def readBlock = ???
+  /** Get a read-only ByteBuffer corresponding to one block. */
+  def getBlock(address: Int): ByteBuffer = {
+    val byteAddress = address * BLOCKSIZE
+    channel.map(MapMode.READ_ONLY,byteAddress,BLOCKSIZE)
+  }
 
-  def close() = channel.close()
+  def close() = {
+    lock.release()
+    channel.close()
+    raf.close()
+  }
 
 }

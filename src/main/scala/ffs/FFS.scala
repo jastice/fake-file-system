@@ -1,11 +1,11 @@
 package ffs
 
+import java.io.{File => JFile}
+
 /**
   * The Fake File System.
   */
-class FFS private(physical: java.nio.file.Path, header: HeaderBlock, freeMap: FreeMap) {
-
-//  private[ffs] val freeMap: FreeMap = ???
+class FFS private(physical: JFile, header: HeaderBlock, freeMap: FreeMap) {
 
   private val io = new IO(physical)
 
@@ -51,11 +51,11 @@ object FFS {
     * @param physical The actual file system file in which the fake file system will reside.
     * @return
     */
-  def apply(physical: java.io.File): FFS = {
+  def apply(physical: JFile): FFS = {
     // for now, just create it if it doesn't exist.
     if (physical.exists()) {
       // initialize from file
-      new FFS(physical.toPath, ???, ???)
+      new FFS(physical, ???, ???)
     } else {
       throw new RuntimeException(s"no FFS here: ${physical.getAbsolutePath}")
     }
@@ -64,18 +64,21 @@ object FFS {
   /**
     *
     * @param physical
-    * @param size size in bytes
+    * @param size size in bytes. Actual size will be rounded up to the next highest multiple of blockSize (512)
     * @return
     */
-  def initialize(physical: java.io.File, size: Int): FFS = {
-    import constants.blockSize, common.ceilingDiv
+  def initialize(physical: JFile, size: Int): FFS = {
+    import constants.BLOCKSIZE, common.ceilingDiv
+
+    val nBlocks = ceilingDiv(size, BLOCKSIZE)
+    val sizeRounded = nBlocks*BLOCKSIZE
 
     physical.createNewFile()
 
-    val nBlocks = ceilingDiv(size, blockSize)
+
     val headerBlock = HeaderBlock(nBlocks,Vector(2))
 
-    val freeMap = FreeMap(size)
+    val freeMap = FreeMap(sizeRounded)
 
     val rootBlockAddress = freeMap.takeBlocks(1).head
     val dummyFileBlockAddress = freeMap.takeBlocks(1).head
@@ -92,13 +95,21 @@ object FFS {
       freeMap.addressedBlocks ++
       Vector(rootBlockInfo, dummyFileInfo)
 
-    val path = physical.toPath
-
-    val io = new IO(path)
+    val io = new IO(physical)
     io.writeBlocks(blocks)
     io.close()
 
-    new FFS(path, headerBlock, freeMap)
+    new FFS(physical, headerBlock, freeMap)
+  }
+
+  /**
+    * Open an existing Fake File System
+    * @param physical
+    * @return
+    */
+  def open(physical: JFile): FFS = {
+
+    ???
   }
 
 }

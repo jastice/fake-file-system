@@ -1,6 +1,6 @@
 package ffs
 
-import java.nio.charset.Charset
+import java.nio.charset.{StandardCharsets, Charset}
 
 /**
   * Constants and magic values.
@@ -8,16 +8,18 @@ import java.nio.charset.Charset
 object constants {
 
   /** The block size in bytes in the file system. */
-  val blockSize: Int = 512
+  val BLOCKSIZE: Int = 512
 
   /** Marker for FFS format. */
-  val magic: Short = 0x0FF5.toShort
+  val MAGIC: Short = 0x0FF5.toShort
 
   /** Version of FFS format */
-  val version: Byte = 0.toByte
+  val VERSION: Byte = 0.toByte
 
-  val filenameBytes: Int = 8
+  /** Number of bytes reserved for file names. */
+  val FILENAME_BYTES: Int = 8
 
-  val charset = Charset.forName("UTF-8")
+  /** The character set for string serialization. */
+  val CHARSET = StandardCharsets.UTF_8
 
 }

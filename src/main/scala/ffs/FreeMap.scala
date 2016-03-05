@@ -1,17 +1,18 @@
 package ffs
 
-import constants.blockSize
+import constants.BLOCKSIZE
 import FreeMap._
 
 /**
   * Map of free blocks in filesystem.
+ *
   * @param blocks blocks comprising the FreeMap
   * @param size Size of file system in blocks
   */
 class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
 
   private val firstBlockAddress = 1
-  private val blockBits = blockSize*8
+  private val blockBits = BLOCKSIZE*8
 
   private[ffs] var free: Int = countFree
 
@@ -68,7 +69,7 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
         val blockZero = blockBits*b
         // the last block may not be completely filled
         var i = 0
-        while (blockZero + i < blockSize && collected < n) {
+        while (blockZero + i < BLOCKSIZE && collected < n) {
           val byte = data(i)
           val added = (if (byte != 0xFF.toByte) freeBits(byte) else Vector.empty).map{ k => blockZero + i*8 + k }
           result ++= added
@@ -107,7 +108,7 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
     freed
   }
 
-  private[ffs] def addressedBlocks: Vector[(Int,DataBlock)] =
+  def addressedBlocks: Vector[(Int,DataBlock)] =
     blocks.zipWithIndex.map{ case (block,addr) => (firstBlockAddress+addr, block) }
 }
 
@@ -116,13 +117,14 @@ object FreeMap {
 
   /**
     * Initialize a FreeMap for given size of blocks
+ *
     * @param size size of file system in blocks
     */
   def apply(size: Int) = {
 
     val nFreeMapBlocks = common.ceilingDiv(size, blockBits)
 
-    val freeMapBlocks = Vector.fill(nFreeMapBlocks)(DataBlock(Array.ofDim(blockSize)))
+    val freeMapBlocks = Vector.fill(nFreeMapBlocks)(DataBlock(Array.ofDim[Byte](BLOCKSIZE)))
     val reservedBlocks = 1 + freeMapBlocks.size // header block + FreeMap itself
     val freeMap = new FreeMap(freeMapBlocks, size)
     val firstBlock = freeMapBlocks(0)
@@ -131,14 +133,14 @@ object FreeMap {
     freeMap
   }
 
-  private val blockBits = blockSize * 8
+  private val blockBits = BLOCKSIZE * 8
 
-  private[ffs] def blockAddress(address: Int): (Int,Int) = (address / blockBits, address % blockBits)
+  def blockAddress(address: Int): (Int,Int) = (address / blockBits, address % blockBits)
 
   /** Free bit indexes in a byte.
     * index 0 is most significant digit.
     */
-  private[ffs] def freeBits(b: Byte): Vector[Int] = {
+  def freeBits(b: Byte): Vector[Int] = {
     (0 until 8).filter { i =>
       ((0x80 >> i) & b) == 0
     }.toVector
@@ -147,7 +149,7 @@ object FreeMap {
   /**
     * Count 1-bits in a byte.
     */
-  private[ffs] def num1Bits(b: Byte): Int = {
+  def num1Bits(b: Byte): Int = {
     (1 & b)        + (1 & (b >> 1)) + (1 & (b >> 2)) + (1 & (b >> 3)) +
     (1 & (b >> 4)) + (1 & (b >> 5)) + (1 & (b >> 6)) + (1 & (b >> 7))
   }
