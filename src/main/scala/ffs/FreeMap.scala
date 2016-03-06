@@ -112,6 +112,10 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
 
   def addressedBlocks: Vector[(Int,DataBlock)] =
     blocks.zipWithIndex.map{ case (block,addr) => (firstBlockAddress+addr, block) }
+
+  /** Write current state of FreeMap to IO. Just write all the blocks to keep it simple. */
+  def flush(io: IO): Unit =
+    addressedBlocks.foreach { case (addr, block) => io.writeBlock(addr, block) }
 }
 
 
