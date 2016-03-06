@@ -5,11 +5,17 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel.MapMode
 import constants.BLOCKSIZE
 
+/**
+  * IO operations: writing and reading blocks by their address.
+  * This is the only place actual writing and reading from file happens.
+  *
+  * @param file file to operate on
+  */
 class IO(file: JFile) {
 
   val raf = new RandomAccessFile(file,"rw")
   val channel = raf.getChannel
-  val lock = channel.lock() // TODO do we have to do anything more to observe locks?
+  val lock = channel.lock() // note: locks won't help controlling file access within the JVM
 
   /** Write multiple blocks at respective block addresses. */
   def writeBlocks(locBlocks: Vector[(Int,Block)]) = {

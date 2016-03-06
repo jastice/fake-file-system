@@ -4,12 +4,12 @@ import org.scalatest.FunSpec
 
 class FakeFileSystemSpec extends FunSpec {
   describe("Creating a filesystem") {
-    it("initializing empty fs"){
+    it("initializing empty fs") {
       val file = new java.io.File("dummy-fs")
       FFS.initialize(file, 1024*512)
 
       assert(file.exists())
-      assert(file.isFile())
+      assert(file.isFile)
 
       file.delete()
     }
@@ -19,7 +19,13 @@ class FakeFileSystemSpec extends FunSpec {
     it("reads the same blocks that were written") {
 
       val file = new java.io.File("dummy-fs-write-open")
-//      val ffs1 = FFS.initialize(file, 1024*512)
+      val ffs1 = FFS.initialize(file, 1024*512)
+
+      val ffs2 = FFS.open(file)
+
+      assert(ffs1.header == ffs2.header)
+
+      // TODO reading existent files
 
     }
   }

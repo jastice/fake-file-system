@@ -5,9 +5,7 @@ import java.io.{File => JFile}
 /**
   * The Fake File System.
   */
-class FFS private(physical: JFile, header: HeaderBlock, freeMap: FreeMap) {
-
-  private val io = new IO(physical)
+class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private[ffs] val freeMap: FreeMap) {
 
   /** Set a block as blocked or free in the freeMap. */
   private def updateBlock(address: Int, blocked: Boolean): Unit = ???
@@ -47,23 +45,8 @@ class FFS private(physical: JFile, header: HeaderBlock, freeMap: FreeMap) {
 object FFS {
 
   /**
-    * Opens or creates a Fake File System from given physical file.
-    * @param physical The actual file system file in which the fake file system will reside.
-    * @return
-    */
-  def apply(physical: JFile): FFS = {
-    // for now, just create it if it doesn't exist.
-    if (physical.exists()) {
-      // initialize from file
-      new FFS(physical, ???, ???)
-    } else {
-      throw new RuntimeException(s"no FFS here: ${physical.getAbsolutePath}")
-    }
-  }
-
-  /**
     *
-    * @param physical
+    * @param physical "physical" file system file
     * @param size size in bytes. Actual size will be rounded up to the next highest multiple of blockSize (512)
     * @return
     */
@@ -108,8 +91,14 @@ object FFS {
     * @return
     */
   def open(physical: JFile): FFS = {
+    require(physical.isFile, s"'$physical' is not a regular file.")
 
-    ???
+    val io = new IO(physical)
+
+    val header = HeaderBlock(io.getBlock(0))
+    val freemap = FreeMap(io, header.blockCount)
+
+    new FFS(physical, header, freemap)
   }
 
 }

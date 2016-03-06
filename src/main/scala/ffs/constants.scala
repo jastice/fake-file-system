@@ -14,7 +14,7 @@ object constants {
   val MAGIC: Short = 0x0FF5.toShort
 
   /** Version of FFS format */
-  val VERSION: Byte = 0.toByte
+  val VERSION: Short = 0
 
   /** Number of bytes reserved for file names. */
   val FILENAME_BYTES: Int = 8

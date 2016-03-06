@@ -1,11 +1,13 @@
 package ffs
 
+import java.nio.ByteBuffer
+
 import constants.BLOCKSIZE
 import FreeMap._
 
 /**
   * Map of free blocks in filesystem.
- *
+  *
   * @param blocks blocks comprising the FreeMap
   * @param size Size of file system in blocks
   */
@@ -115,9 +117,23 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
 
 object FreeMap {
 
+  /** Read FreeMap from IO.
+    *
+    * @param io IO
+    * @param size data blocks in the FreeMap
+    */
+  def apply(io: IO, size: Int): FreeMap = {
+    // hard-coded assumption: freemap always begins at block 1
+    val blocks = (1 to size).map { i =>
+      DataBlock(io.getBlock(i))
+    }.toVector
+
+    new FreeMap(blocks, size)
+  }
+
   /**
     * Initialize a FreeMap for given size of blocks
- *
+    *
     * @param size size of file system in blocks
     */
   def apply(size: Int) = {
