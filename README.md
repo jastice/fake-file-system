@@ -7,46 +7,25 @@ A virtual file system. Maps data operations onto a file system inside a single f
 
 This project requires SBT 0.13
 
-### Quickstart
-
-    sbt update compile test run
-    
-    
 ## File system format
 
-We save everything in blocks of 512 bytes. There are layout blocks and data blocks, and a header block.
-All the blocks have a 2-byte "block address", contiguously numbered from the start of the file. 
-This means we can have up to 65k blocks, thus our fake file system allows up to 32MB. That's not a whole lot, 
-but should demonstrate the concept.  
+Kind of like the Unix File System, we save everything in fixed size blocks of 512 bytes.
+ 
+Block types:
 
-The header block is always at the beginning and has the address 0. 
+* header block - just one block at the beginning of the file (address 0). Contains metadata and addresses of root directory.
+* directory block - contains file entries (filename and metadata). these can be directories or actual files
+* file block - references to actual file data blocks
+* data block - raw data for files
 
-### Header block format
+## Limitations
 
-    # [file format marker]
-    # [file format version]
-    # [stuff]
-    # [layout block count (1 byte)]
-    # [layout block addresses (2 bytes)]...
-    
-### Layout block format
+* Blocks have an integer address, so at most we can save Int.MaxValue * 512 bytes in a Fake File System.
+* Files have only one block for their addresses, so max file size is limited to a little less than 64k
+* file names are at most 8 bytes
 
-File size is given in bytes. The number of block addresses is derived from this. The block address list also defines 
-the order of the blocks. The last block is 0-padded when the file does not completely fill it.
 
-    # [layout block marker]
-    # [file name][file byte size][file block addresses]...
-    
-### Data block format
+## Design
 
-    # [bytes]
-    # [0-padding]
-
-## File operations
-
-### create
-### write
-### read
-### move
-### delete
-
+The user facing API is the FFS class/object, which allows opens a FFS from a physical file, and allows some basic
+operations. All operations directly modify the underlying file, as long as FFS is used and not the underlying library.
