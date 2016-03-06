@@ -2,6 +2,7 @@ package ffs
 
 import java.nio.ByteBuffer
 
+import ffs.impl.{FileEntry, DirectoryBlock, FileBlock, HeaderBlock}
 import org.scalatest.FunSpec
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 

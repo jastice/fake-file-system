@@ -1,9 +1,8 @@
-package ffs
+package ffs.impl
 
-import java.nio.ByteBuffer
-
-import constants.BLOCKSIZE
-import FreeMap._
+import ffs.common.constants.BLOCKSIZE
+import ffs.impl.FreeMap._
+import ffs.common
 
 /**
   * Map of free blocks in filesystem.
@@ -41,8 +40,8 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
 
   /**
     *
-    * @param block
-    * @param bit
+    * @param block block to operate on
+    * @param bit bit within block to clear
     * @return whether bit was cleared (true) or already clear (false)
     */
   private[ffs] def clearBit(block: DataBlock, bit: Int): Boolean = {

@@ -1,5 +1,6 @@
 package ffs
 
+import ffs.impl.FreeMap
 import org.scalatest.FunSpec
 
 import FreeMap._

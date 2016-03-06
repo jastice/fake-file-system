@@ -1,9 +1,10 @@
-package ffs
+package ffs.impl
 
 import java.nio.ByteBuffer
-import blocks._
-import constants._
-import common.ceilingDiv
+
+import ffs.impl.blocks._
+import ffs.common.constants._
+import ffs.common.ceilingDiv
 
 // low-level representation of files in the FFS
 
@@ -79,7 +80,6 @@ case class FileBlock(parentBlock: Int, dataBlocks: Vector[Int], fileSize: Int) e
       dataBlocks.foreach(b.putInt)
     }
   }
-
 }
 
 object FileBlock {

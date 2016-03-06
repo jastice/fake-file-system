@@ -1,9 +1,11 @@
-package ffs
+package ffs.impl
 
 import java.io.{File => JFile, RandomAccessFile}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel.MapMode
-import constants.BLOCKSIZE
+
+import ffs.common.constants
+import ffs.common.constants.BLOCKSIZE
 
 /**
   * IO operations: writing and reading blocks by their address.

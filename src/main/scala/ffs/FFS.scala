@@ -2,6 +2,9 @@ package ffs
 
 import java.io.{File => JFile}
 
+import ffs.impl._
+import ffs.common.constants
+
 /**
   * The Fake File System.
   */
@@ -12,8 +15,17 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
 
 
   /** List all files within `path`. */
-  def ls(path: String): Seq[String] = {
-    ???
+  def ls(path: String): Seq[FileNode] = {
+    val p = Path(path)
+
+    // TODO recurse to given path
+
+    readWithIO { io =>
+      header.rootBlockAddresses
+        .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
+        .filter(!_.deleted)
+        .map { e => if (e.dir) Directory(e.name) else File(e.name, 0) }
+    }
   }
 
   /** Recursively list all files below `path`, with their full path name. */
@@ -35,6 +47,25 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
     // mark all its blocks as free
     ???
   }
+
+  /** Perform reading IO operations, and close IO afterward. */
+  private def readWithIO[A](f: IO => A): A = {
+    // TODO readonly IO type
+    val io = new IO(physical)
+    val res = f(io)
+    io.close()
+    res
+  }
+
+  /** Perform mutation operations with an IO, write the changed filesystem metadata, and close IO. */
+  private def mutateWithIO[A](f: IO => A): A = {
+    val io = new IO(physical)
+    val res = f(io)
+    io.writeBlock(0,header) // write this regardless of what kind of change was performed because simplicity
+    freeMap.flush(io)
+    res
+  }
+
 
 //  def flush(): FFS = ???
 
@@ -87,6 +118,7 @@ object FFS {
 
   /**
     * Open an existing Fake File System
+    *
     * @param physical
     * @return
     */

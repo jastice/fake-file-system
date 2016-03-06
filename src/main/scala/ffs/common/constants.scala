@@ -1,6 +1,6 @@
-package ffs
+package ffs.common
 
-import java.nio.charset.{StandardCharsets, Charset}
+import java.nio.charset.StandardCharsets
 
 /**
   * Constants and magic values.
