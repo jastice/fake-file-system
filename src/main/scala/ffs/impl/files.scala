@@ -8,7 +8,7 @@ sealed abstract class FileNode {
 
 }
 
-case class File(name: String, size: Int) extends FileNode
+case class File(name: String) extends FileNode
 
 case class Directory(name: String) extends FileNode
 

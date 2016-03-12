@@ -24,7 +24,7 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
       header.rootBlockAddresses
         .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
         .filter(!_.deleted)
-        .map { e => if (e.dir) Directory(e.name) else File(e.name, 0) }
+        .map { e => if (e.dir) Directory(e.name) else File(e.name) }
     }
   }
 
@@ -49,7 +49,7 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
   }
 
   /** Perform reading IO operations, and close IO afterward. */
-  private def readWithIO[A](f: IO => A): A = {
+  private[ffs] def readWithIO[A](f: IO => A): A = {
     // TODO readonly IO type
     val io = new IO(physical)
     val res = f(io)
@@ -84,15 +84,13 @@ object FFS {
   def initialize(physical: JFile, size: Int): FFS = {
     import constants.BLOCKSIZE, common.ceilingDiv
 
+    require(!physical.isFile, s"file '$physical' already exists, will not initialize.")
+
     val nBlocks = ceilingDiv(size, BLOCKSIZE)
-    val sizeRounded = nBlocks*BLOCKSIZE
 
     physical.createNewFile()
 
-
-    val headerBlock = HeaderBlock(nBlocks,Vector(2))
-
-    val freeMap = FreeMap(sizeRounded)
+    val freeMap = FreeMap(nBlocks)
 
     val rootBlockAddress = freeMap.takeBlocks(1).head
     val dummyFileBlockAddress = freeMap.takeBlocks(1).head
@@ -101,6 +99,7 @@ object FFS {
     val dummyFileBlock = FileBlock(rootBlockAddress, Vector.empty[Int], 0)
     val dummyFileInfo = (dummyFileBlockAddress, dummyFileBlock)
 
+    val headerBlock = HeaderBlock(nBlocks,Vector(rootBlockAddress))
     val rootBlock = DirectoryBlock(Vector(dummyFileEntry))
     val rootBlockInfo = (rootBlockAddress, rootBlock)
 
@@ -108,6 +107,9 @@ object FFS {
       Vector( (0,headerBlock) ) ++
       freeMap.addressedBlocks ++
       Vector(rootBlockInfo, dummyFileInfo)
+
+    println("freemap blocks: " + freeMap.addressedBlocks)
+    println("initialized ffs: " + blocks)
 
     val io = new IO(physical)
     io.writeBlocks(blocks)
