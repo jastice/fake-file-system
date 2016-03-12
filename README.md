@@ -21,8 +21,10 @@ Block types:
 ## Limitations
 
 * Blocks have an integer address, so at most we can save Int.MaxValue * 512 bytes in a Fake File System.
-* Files have only one block for their addresses, so max file size is limited to a little less than 64k
+* Files have only one block for their addresses, so max file size is limited to a little less than 64k and files in a directory are limited to at most 4032
 * file names are at most 8 bytes
+* not thread-safe: multiple instances of an FFS can be created for the same file. As they cache data, it can become out of sync easily.
+* performance was not a consideration in the design
 
 
 ## Design

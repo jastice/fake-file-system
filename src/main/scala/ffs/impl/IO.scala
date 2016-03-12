@@ -29,7 +29,7 @@ class IO(file: JFile) {
   /** Write a Block to the given block address. */
   def writeBlock(address: Int, block: Block) = {
     val byteAddress = address * BLOCKSIZE
-    val written = channel.write(block.toBytes,byteAddress)
+    val written = channel.write(block.toBytes, byteAddress)
     assert(written == BLOCKSIZE)
   }
 

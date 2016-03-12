@@ -65,7 +65,11 @@ object HeaderBlock {
 }
 
 
-/** A file block represents either a regular file with data or a directory. */
+/** A file block represents either a regular file or a directory.
+  *
+  * @param parentBlock the parent directory of this file
+  * @param dataBlocks addresses of data or directory blocks
+  * */
 case class FileBlock(parentBlock: Int, dataBlocks: Vector[Int], fileSize: Int) extends Block {
   override def toBytes = {
     require(dataBlocks.size <= FileBlock.maxFileBlocks)
