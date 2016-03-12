@@ -7,6 +7,9 @@ import ffs.common.constants
 
 /**
   * The Fake File System.
+  *
+  * Currently not thread-safe. Possible solution: make operations synchronized, check for / wait on file locks,
+  * have only one instance per physical file.
   */
 class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private[ffs] val freeMap: FreeMap) {
 
@@ -16,7 +19,7 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
 
   /** List all files within `path`. */
   def ls(path: String): Seq[FileNode] = {
-    val p = Path(path)
+    val pathParts = Path(path)
 
     // TODO recurse to given path
 
@@ -31,18 +34,24 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
   /** Recursively list all files below `path`, with their full path name. */
   def lsr(path: String): Seq[String] = ???
 
-  /** Create directory in under `path`. Path must be directory itself. */
-  def mkdir(path: String): FFS = ???
+  /** Create directory in at path. Path must be directory itself. */
+  def mkdir(path: String): Unit = ???
 
-  /** Create empty file in directory `path`. */
-  def touch(path: String): FFS = ???
+  /** Create empty file at path. */
+  def touch(path: String): Unit = {
+    val pathParts = Path(path)
 
-  def cp(from: String, to: String): FFS = ???
+    mutateWithIO { io =>
+      header.rootBlockAddresses
+    }
+  }
 
-  def mv(from: String, to: String): FFS = ???
+  def cp(from: String, to: String): Unit = ???
+
+  def mv(from: String, to: String): Unit = ???
 
   /** Delete a file. */
-  def rm(path: String): FFS = {
+  def rm(path: String): Unit = {
     // mark file as deleted in index
     // mark all its blocks as free
     ???
@@ -65,9 +74,6 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
     freeMap.flush(io)
     res
   }
-
-
-//  def flush(): FFS = ???
 
 }
 
@@ -108,9 +114,6 @@ object FFS {
       freeMap.addressedBlocks ++
       Vector(rootBlockInfo, dummyFileInfo)
 
-    println("freemap blocks: " + freeMap.addressedBlocks)
-    println("initialized ffs: " + blocks)
-
     val io = new IO(physical)
     io.writeBlocks(blocks)
     io.close()
@@ -121,7 +124,7 @@ object FFS {
   /**
     * Open an existing Fake File System
     *
-    * @param physical
+    * @param physical underlying file for the FFS
     * @return
     */
   def open(physical: JFile): FFS = {
@@ -133,6 +136,28 @@ object FFS {
     val freemap = FreeMap(io, header.blockCount)
 
     new FFS(physical, header, freemap)
+  }
+
+
+  private def fileFromRoot(io: IO)(header: HeaderBlock, path: Path): Option[(FileEntry,FileBlock)] =
+    fileForPath(io)(header.rootBlockAddresses, path.parts)
+
+  /** Get the file entry and block describing the file referenced by `path` below `parent`. */
+  private def fileForPath(io: IO)(addresses: Vector[Int], path: Vector[String]): Option[(FileEntry,FileBlock)] = {
+    if (path.isEmpty) None
+    else {
+      val name = path.head
+      addresses
+        .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
+        .find { entry => !entry.deleted && entry.name == name }
+        .flatMap { entry =>
+          val restPath = path.tail
+          val block = FileBlock(io.getBlock(entry.address))
+          if (restPath.isEmpty) Some((entry,block))
+          else if (entry.dir) fileForPath(io)(block.dataBlocks, restPath)
+          else None // not a dir here, can't complete path recursion
+        }
+    }
   }
 
 }
