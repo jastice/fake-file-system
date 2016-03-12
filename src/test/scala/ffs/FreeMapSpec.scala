@@ -26,6 +26,12 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
 
   describe("takeBlocks") {
 
+    it("respects reserved blocks") {
+      val freemap = FreeMap(324)
+      val taken = freemap.takeBlocks(3)
+      assert(taken == Vector(2,3,4))
+    }
+
     it("returns correct number of distinct block addresses") {
       val freemap = FreeMap(7732)
       val take = 171
@@ -52,6 +58,8 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
         }
       )
     }
+
+
   }
 
   describe("setBit") {
