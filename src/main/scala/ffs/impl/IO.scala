@@ -29,14 +29,14 @@ class IO(file: JFile) {
   /** Write a Block to the given block address. */
   def writeBlock(address: Int, block: Block) = {
     val byteAddress = address * BLOCKSIZE
-    val written = channel.position(byteAddress).write(block.toBytes)
+    val written = channel.write(block.toBytes,byteAddress)
     assert(written == BLOCKSIZE)
   }
 
   /** Get a read-only ByteBuffer corresponding to one block. */
   def getBlock(address: Int): ByteBuffer = {
     val byteAddress = address * BLOCKSIZE
-    channel.map(MapMode.READ_ONLY,byteAddress,BLOCKSIZE)
+    channel.map(MapMode.READ_ONLY, byteAddress, BLOCKSIZE)
   }
 
   def close() = {
