@@ -20,16 +20,13 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
     }
   }
 
-  describe("FreeMap basic operations") {
-
-  }
-
   describe("takeBlocks") {
 
     it("respects reserved blocks") {
       val freemap = FreeMap(324)
-      val taken = freemap.takeBlocks(3)
-      assert(taken == Vector(2,3,4))
+      val taken = freemap.takeBlocks(9)
+      // block 0 is reserved by default for header, and block 1 is freemap itself
+      assert(taken == Vector(2,3,4,5,6,7,8,9,10))
     }
 
     it("returns correct number of distinct block addresses") {
@@ -64,52 +61,84 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
 
   describe("setBit") {
 
-    it("sets cleared bit correctly") {
+    it("sets bits addressed by most significant digit as index 0") {
+      val freemap = FreeMap(334)
+      val block = freemap.blocks.head
+      val byte = 73
+      val bit = 0
+      freemap.setBit(block, byte*8+bit)
+      println(block.data.toVector)
+      assert(block.data(byte) == 0x80.toByte)
+    }
+
+    it("sets bits addressed by most significant digit as index 7") {
       val freemap = FreeMap(7732)
       val blk = freemap.blocks.head
       val byte = 77
-      val bit = 4
+      val bit = 7
       freemap.setBit(blk, byte*8+bit)
-      assert(blk.data(byte) == 16)
+      assert(blk.data(byte) == 1)
     }
 
     it("setting a clear bit returns true") {
       val freemap = FreeMap(7732)
-      val blk = freemap.blocks.head
-      assert(freemap.setBit(blk,3732))
+      val block = freemap.blocks.head
+      assert(freemap.setBit(block,3732))
     }
 
     it("setting a set bit returns false") {
       val freemap = FreeMap(7732)
-      val blk = freemap.blocks.head
-      freemap.setBit(blk,3732)
-      assert(! freemap.setBit(blk,3732))
+      val block = freemap.blocks.head
+      freemap.setBit(block,3732)
+      assert(! freemap.setBit(block,3732))
     }
   }
 
   describe("clearBit") {
+
+    it("clears bits addressed by most significant digit as index 0") {
+      val freemap = FreeMap(334)
+      val block = freemap.blocks.head
+      val byte = 73
+      val bit = 0
+      block.data.update(byte,0xFF.toByte)
+      freemap.clearBit(block, byte*8+bit)
+      assert(block.data(byte) == 0x7F.toByte)
+    }
+
+    it("clears bits addressed by least significant digit as index 7") {
+      val freemap = FreeMap(334)
+      val block = freemap.blocks.head
+      val byte = 73
+      val bit = 7
+      block.data.update(byte,0xFF.toByte)
+      freemap.clearBit(block, byte*8+bit)
+      assert(block.data(byte) == ~1.toByte)
+    }
+
+
     it("clear set bit correctly") {
       val freemap = FreeMap(7732)
-      val blk = freemap.blocks.head
+      val block = freemap.blocks.head
       val byte = 77
       val bit = 4
-      freemap.setBit(blk, byte*8+bit)
-      assert(blk.data(byte) == 16)
-      freemap.clearBit(blk, byte*8+bit)
-      assert(blk.data(byte) == 0)
+      freemap.setBit(block, byte*8+bit)
+      assert(block.data(byte) == 8)
+      freemap.clearBit(block, byte*8+bit)
+      assert(block.data(byte) == 0)
     }
 
     it("clearing a clear bit returns false") {
       val freemap = FreeMap(7732)
-      val blk = freemap.blocks.head
-      assert(! freemap.clearBit(blk,3732))
+      val block = freemap.blocks.head
+      assert(! freemap.clearBit(block,3732))
     }
 
     it("clearing a set bit returns true") {
       val freemap = FreeMap(7732)
-      val blk = freemap.blocks.head
-      freemap.setBit(blk,3732)
-      assert(freemap.clearBit(blk,3732))
+      val block = freemap.blocks.head
+      freemap.setBit(block,3732)
+      assert(freemap.clearBit(block,3732))
     }
   }
 

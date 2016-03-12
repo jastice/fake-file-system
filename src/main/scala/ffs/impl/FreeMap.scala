@@ -26,12 +26,13 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
 
   /**
     * @param block block to set bit in
-    * @param bit bit to set
+    * @param bitAddress bit to set
     * @return whether the bit was set in this operation (true) or already set (false)
     */
-  private[ffs] def setBit(block: DataBlock, bit: Int): Boolean = {
-    val byteAddress = bit >> 3 // div 8 :)
-    val mask = 1 << (bit & 0x7)
+    private[ffs] def setBit(block: DataBlock, bitAddress: Int): Boolean = {
+    val byteAddress = bitAddress >> 3 // div 8 :)
+    val bit = bitAddress & 0x7
+    val mask = 0x80 >> bit
     val byte = block.data(byteAddress)
     val newByte = (mask | byte).toByte
     block.data.update(byteAddress, newByte)
@@ -41,12 +42,13 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
   /**
     *
     * @param block block to operate on
-    * @param bit bit within block to clear
+    * @param bitAddress bit within block to clear
     * @return whether bit was cleared (true) or already clear (false)
     */
-  private[ffs] def clearBit(block: DataBlock, bit: Int): Boolean = {
-    val byteAddress = bit >> 3
-    val mask = ~(1 << (bit & 0x7))
+  private[ffs] def clearBit(block: DataBlock, bitAddress: Int): Boolean = {
+    val byteAddress = bitAddress >> 3
+    val bit = bitAddress & 0x7
+    val mask = ~(0x80 >> bit)
     val byte = block.data(byteAddress)
     val newByte = (mask & byte).toByte
     block.data.update(byteAddress, newByte)
@@ -120,6 +122,8 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
 
 object FreeMap {
 
+  private val BLOCK_BITS = BLOCKSIZE * 8
+
   /** Read FreeMap from IO.
     *
     * @param io IO
@@ -141,7 +145,7 @@ object FreeMap {
     */
   def apply(size: Int) = {
 
-    val nFreeMapBlocks = common.ceilingDiv(size, blockBits)
+    val nFreeMapBlocks = common.ceilingDiv(size, BLOCK_BITS)
 
     val freeMapBlocks = Vector.fill(nFreeMapBlocks)(DataBlock(Array.ofDim[Byte](BLOCKSIZE)))
     val reservedBlocks = 1 + freeMapBlocks.size // header block + FreeMap itself
@@ -152,9 +156,7 @@ object FreeMap {
     freeMap
   }
 
-  private val blockBits = BLOCKSIZE * 8
-
-  def blockAddress(address: Int): (Int,Int) = (address / blockBits, address % blockBits)
+  def blockAddress(address: Int): (Int,Int) = (address / BLOCK_BITS, address % BLOCK_BITS)
 
   /** Free bit indexes in a byte.
     * index 0 is most significant digit.

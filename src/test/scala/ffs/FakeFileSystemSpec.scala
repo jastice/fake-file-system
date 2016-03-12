@@ -1,12 +1,13 @@
 package ffs
 
 import ffs.impl.File
-import org.scalatest.FunSpec
+import org.scalatest.{FunSpec, SequentialNestedSuiteExecution}
 
-class FakeFileSystemSpec extends FunSpec {
+class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
   describe("Creating a filesystem") {
     it("initializing empty fs") {
       val file = new java.io.File("dummy-fs")
+      file.delete()
       FFS.initialize(file, 1024*512)
 
       assert(file.exists())
@@ -17,10 +18,11 @@ class FakeFileSystemSpec extends FunSpec {
 
     it("contains the default 'foo' file") {
       val file = new java.io.File("dummy-fs")
+      file.delete()
       val ffs = FFS.initialize(file, 1024*512)
       val filesInRoot = ffs.ls("/")
-      println(filesInRoot)
-      assert(filesInRoot.contains(File("foo",0)))
+
+      assert(filesInRoot.contains(File("foo")))
       file.delete()
     }
   }
@@ -29,8 +31,8 @@ class FakeFileSystemSpec extends FunSpec {
     it("reads the same blocks that were written") {
 
       val file = new java.io.File("dummy-fs-write-open")
+      file.delete()
       val ffs1 = FFS.initialize(file, 1024*512)
-
       val ffs2 = FFS.open(file)
 
       assert(ffs1.header == ffs2.header)
@@ -39,5 +41,5 @@ class FakeFileSystemSpec extends FunSpec {
       // TODO reading existent files
     }
   }
-}
 
+}
