@@ -7,13 +7,26 @@ import ffs.impl.IO
   */
 package object ffs {
 
+  /** Provide a temporary file to a function. */
+  def withFile[A](f: File => A): A = {
+    val file = new File("dummy-test")
+    file.delete() // clean up in case it got left over
+    file.deleteOnExit() // just in case :)
+
+    try { f(file) }
+    finally { file.delete() }
+  }
+
+  /** Provide IO object on temporary file. */
   def withFileIO[A](f: IO => A): A = {
     val file = new File("io-test")
     file.createNewFile()
-    val io = new IO(file)
-    val ret = f(io)
-    io.close()
-    ret
+    file.deleteOnExit()
+
+    IO.withIO(file) { io =>
+      try { f(io) }
+      finally { file.delete() }
+    }
   }
 
 }

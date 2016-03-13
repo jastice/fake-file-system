@@ -4,6 +4,7 @@ import java.io.{File => JFile}
 
 import ffs.impl._
 import ffs.common.constants
+import FFS._
 
 /**
   * The Fake File System.
@@ -17,13 +18,13 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
   private def updateBlock(address: Int, blocked: Boolean): Unit = ???
 
 
-  /** List all files within `path`. */
+  /** List all files within `path`. If path is a file, list that. */
   def ls(path: String): Seq[FileNode] = {
-    val pathParts = Path(path)
 
     // TODO recurse to given path
 
-    readWithIO { io =>
+    withIO { io =>
+      fileFromRoot(io)(header,Path(path))
       header.rootBlockAddresses
         .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
         .filter(!_.deleted)
@@ -57,18 +58,10 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
     ???
   }
 
-  /** Perform reading IO operations, and close IO afterward. */
-  private[ffs] def readWithIO[A](f: IO => A): A = {
-    // TODO readonly IO type
-    val io = new IO(physical)
-    val res = f(io)
-    io.close()
-    res
-  }
+  private def withIO[A](f: IO => A): A = IO.withIO(physical)(f)
 
   /** Perform mutation operations with an IO, write the changed filesystem metadata, and close IO. */
-  private def mutateWithIO[A](f: IO => A): A = {
-    val io = new IO(physical)
+  private def mutateWithIO[A](f: IO => A): A = IO.withIO(physical) { io =>
     val res = f(io)
     io.writeBlock(0,header) // write this regardless of what kind of change was performed because simplicity
     freeMap.flush(io)
@@ -114,9 +107,9 @@ object FFS {
       freeMap.addressedBlocks ++
       Vector(rootBlockInfo, dummyFileInfo)
 
-    val io = new IO(physical)
-    io.writeBlocks(blocks)
-    io.close()
+    IO.withIO(physical) { io =>
+      io.writeBlocks(blocks)
+    }
 
     new FFS(physical, headerBlock, freeMap)
   }
@@ -130,12 +123,11 @@ object FFS {
   def open(physical: JFile): FFS = {
     require(physical.isFile, s"'$physical' is not a regular file.")
 
-    val io = new IO(physical)
-
-    val header = HeaderBlock(io.getBlock(0))
-    val freemap = FreeMap(io, header.blockCount)
-
-    new FFS(physical, header, freemap)
+    IO.withIO(physical) { io =>
+      val header = HeaderBlock(io.getBlock(0))
+      val freemap = FreeMap(io, header.blockCount)
+      new FFS(physical, header, freemap)
+    }
   }
 
 

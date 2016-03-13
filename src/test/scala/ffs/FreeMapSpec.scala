@@ -67,7 +67,6 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val byte = 73
       val bit = 0
       freemap.setBit(block, byte*8+bit)
-      println(block.data.toVector)
       assert(block.data(byte) == 0x80.toByte)
     }
 

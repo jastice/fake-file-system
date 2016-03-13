@@ -13,7 +13,7 @@ import ffs.common.constants.BLOCKSIZE
   *
   * @param file file to operate on
   */
-class IO(file: JFile) {
+class IO private(file: JFile) {
 
   val raf = new RandomAccessFile(file,"rw")
   val channel = raf.getChannel
@@ -39,10 +39,25 @@ class IO(file: JFile) {
     channel.map(MapMode.READ_ONLY, byteAddress, BLOCKSIZE)
   }
 
-  def close() = {
+  private def close() = {
     lock.release()
     channel.close()
     raf.close()
+  }
+
+}
+
+
+object IO {
+
+  /** Perform IO operations, and close IO afterward.
+    * IO can only be used with this function, so you don't forget to close it.
+    */
+  def withIO[A](file: java.io.File)(f: IO => A): A = {
+    // TODO readonly IO type
+    val io = new IO(file)
+    try { f(io) }
+    finally { io.close() }
   }
 
 }
