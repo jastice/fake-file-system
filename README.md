@@ -7,6 +7,12 @@ A virtual file system. Maps data operations onto a file system inside a single f
 
 This project requires SBT 0.13
 
+## Try it out
+
+    > sbt console
+    
+On the sbt console, you are provided an `fs` object that you can run some commands on.
+
 ## File system format
 
 Kind of like the Unix File System, we save everything in fixed size blocks of 512 bytes.
