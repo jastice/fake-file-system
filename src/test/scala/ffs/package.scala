@@ -1,4 +1,4 @@
-import java.io.File
+import java.io.{File => JFile}
 
 import ffs.impl.IO
 
@@ -8,8 +8,8 @@ import ffs.impl.IO
 package object ffs {
 
   /** Provide a temporary file to a function. */
-  def withFile[A](f: File => A): A = {
-    val file = new File("dummy-test")
+  def withFile[A](f: JFile => A): A = {
+    val file = new JFile("dummy-test")
     file.delete() // clean up in case it got left over
     file.deleteOnExit() // just in case :)
 
@@ -19,7 +19,7 @@ package object ffs {
 
   /** Provide IO object on temporary file. */
   def withFileIO[A](f: IO => A): A = {
-    val file = new File("io-test")
+    val file = new JFile("io-test")
     file.createNewFile()
     file.deleteOnExit()
 

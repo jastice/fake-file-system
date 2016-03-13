@@ -8,7 +8,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       withFile { file =>
         FFS.initialize(file, 1024*512)
 
-        assert(file.exists())
+        assert(file.exists)
         assert(file.isFile)
       }
     }

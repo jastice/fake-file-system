@@ -20,19 +20,27 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
 
   /** List all files within `path`. If path is a file, list that. */
   def ls(path: String): Seq[FileNode] = {
+    val myPath = Path(path)
+    require(paths.valid(myPath))
+
 
     withIO { io =>
-      val found = fileFromRoot(io)(header,Path(path))
+      def fileNodes(addresses: Vector[Int]) =
+        fileEntries(io)(addresses)
+          .map { e => if (e.dir) Directory(e.name) else File(e.name) }
 
-      found.map { case (entry,block) =>
-        if (entry.deleted)
-          Vector.empty[FileNode]
-        else if (entry.dir)
-          block.dataBlocks
-            .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
-            .filter(!_.deleted)
-            .map { e => if (e.dir) Directory(e.name) else File(e.name) }
-        else Vector(File(entry.name))
+      if (myPath.parts.isEmpty) // ls on root dir
+        fileNodes(header.rootBlockAddresses)
+      else {
+        fileFromRoot(io)(header,myPath)
+          .map { case (entry,block) =>
+            if (entry.deleted)
+              Vector.empty[FileNode]
+            else if (entry.dir)
+              fileNodes(block.dataBlocks)
+            else Vector(File(entry.name))
+      }
+
       }.getOrElse(Vector.empty[FileNode])
     }
   }
@@ -133,6 +141,13 @@ object FFS {
       val freemap = FreeMap(io, header.blockCount)
       new FFS(physical, header, freemap)
     }
+  }
+
+  /** Non-deleted file entries in directory blocks. */
+  private def fileEntries(io: IO)(addresses: Vector[Int]): Vector[FileEntry] = {
+    addresses
+      .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
+      .filter(!_.deleted)
   }
 
 
