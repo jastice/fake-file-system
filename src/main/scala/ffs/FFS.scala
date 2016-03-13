@@ -49,33 +49,12 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
   def lsr(path: String): Seq[String] = ???
 
   /** Create directory in at path. Path must be directory itself. */
-  def mkdir(path: String): Unit = ???
+  def mkdir(path: String): Unit =
+    createEntry(Path(path), dir = true)
 
   /** Create empty file at path. */
-  def touch(path: String): Unit = {
-    val pathParts = Path(path).parts
-
-    val name = pathParts.head
-
-    val fileBlockAddress = freeMap.takeBlocks(1).head // TODO error handling?
-    val fileBlock = FileBlock(0, Vector(), 0)
-    val fileEntry = FileEntry(name, dir = false, deleted = false, fileBlockAddress)
-
-    mutateWithIO { io =>
-      // TODO don't allow re-creation of existing filenames
-      // find an block with entry to update
-      header.rootBlockAddresses.iterator // iterator for lazy semantics
-        .map { a => (a, DirectoryBlock(io.getBlock(a))) }
-        .collectFirst {
-          case (address, dirBlock) if dirBlock.files.size < DirectoryBlock.MAX_ENTRIES =>
-            (address,dirBlock.copy(dirBlock.files :+ fileEntry))
-        }
-        .foreach { case (address,dirBlock) =>
-          io.writeBlock(address,dirBlock)
-          io.writeBlock(fileBlockAddress, fileBlock)
-        }
-    }
-  }
+  def touch(path: String): Unit =
+    createEntry(Path(path), dir = false)
 
   def cp(from: String, to: String): Unit = ???
 
@@ -86,6 +65,44 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
     // mark file as deleted in index
     // mark all its blocks as free
     ???
+  }
+
+  /** Find an entry slot at `path` and create a file or directory for the name part of path. */
+  private def createEntry(path: Path, dir: Boolean): Unit = {
+
+    // TODO recurse to last part before creating
+    val name = path.parts.last
+
+    val fileBlockAddress = freeMap.takeBlocks(1).head // TODO error handling?
+    val fileBlock = FileBlock(0, Vector(), 0)
+    val fileEntry = FileEntry(name, dir = dir, deleted = false, fileBlockAddress)
+    
+    mutateWithIO { io =>
+      // TODO don't allow re-creation of existing filenames
+      // TODO create files anywhere in the hierarchy
+      // find an block with entry to update
+      header.rootBlockAddresses.iterator // iterator for lazy semantics
+        .map { a => (a, DirectoryBlock(io.getBlock(a))) }
+        .collectFirst {
+          case (address, dirBlock) if dirBlock.files.exists(_.deleted) =>
+            val newBlock =
+              dirBlock.files.zipWithIndex
+                .find { case (entry, i) => entry.deleted }
+                .map { case (entry, i) =>
+                  val newEntries = dirBlock.files.updated(i, fileEntry)
+                  dirBlock.copy(files = newEntries)
+                }
+            (address, newBlock.get) // I'm pretty sure it's safe :P
+
+          case (address, dirBlock) if dirBlock.files.size < DirectoryBlock.MAX_ENTRIES =>
+            val newBlock = dirBlock.copy(dirBlock.files :+ fileEntry)
+            (address, newBlock)
+        }
+        .foreach { case (address,dirBlock) =>
+          io.writeBlock(address,dirBlock)
+          io.writeBlock(fileBlockAddress, fileBlock)
+        }
+    }
   }
 
   private def withIO[A](f: IO => A): A = IO.withIO(physical)(f)
