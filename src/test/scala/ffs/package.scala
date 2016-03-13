@@ -29,4 +29,10 @@ package object ffs {
     }
   }
 
+  /** Provide a FFS on a temporary file. */
+  def withFFS(f: FFS => Unit): Unit = withFile { file =>
+    val fs = FFS.initialize(file, 1024*512)
+    f(fs)
+  }
+
 }

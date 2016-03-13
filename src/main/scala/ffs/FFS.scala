@@ -53,10 +53,27 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
 
   /** Create empty file at path. */
   def touch(path: String): Unit = {
-    val pathParts = Path(path)
+    val pathParts = Path(path).parts
+
+    val name = pathParts.head
+
+    val fileBlockAddress = freeMap.takeBlocks(1).head // TODO error handling?
+    val fileBlock = FileBlock(0, Vector(), 0)
+    val fileEntry = FileEntry(name, dir = false, deleted = false, fileBlockAddress)
 
     mutateWithIO { io =>
-      header.rootBlockAddresses
+      // TODO don't allow re-creation of existing filenames
+      // find an block with entry to update
+      header.rootBlockAddresses.iterator // iterator for lazy semantics
+        .map { a => (a, DirectoryBlock(io.getBlock(a))) }
+        .collectFirst {
+          case (address, dirBlock) if dirBlock.files.size < DirectoryBlock.MAX_ENTRIES =>
+            (address,dirBlock.copy(dirBlock.files :+ fileEntry))
+        }
+        .foreach { case (address,dirBlock) =>
+          io.writeBlock(address,dirBlock)
+          io.writeBlock(fileBlockAddress, fileBlock)
+        }
     }
   }
 
@@ -86,6 +103,13 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
 
 
 object FFS {
+
+  /**
+    * Open an existing FFS or create a new one with given size.
+    */
+  def apply(physical: JFile, size: Int): FFS =
+    if (physical.isFile) open(physical)
+    else initialize(physical, size)
 
   /**
     *

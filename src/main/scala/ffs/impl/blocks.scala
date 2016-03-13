@@ -111,6 +111,8 @@ case class DirectoryBlock(files: Vector[FileEntry]) extends Block {
 
 object DirectoryBlock {
 
+  val MAX_ENTRIES = ceilingDiv(BLOCKSIZE, FileEntry.ENTRY_BYTES)
+
   private def readEntries(collected: Vector[FileEntry], bytes: ByteBuffer): Vector[FileEntry] = {
     FileEntry(bytes) match {
       case Some(e: FileEntry) => readEntries(collected :+ e, bytes)
@@ -201,16 +203,12 @@ object blocks {
   def isDir(f: Int): Boolean = (flags.dir & f) != 0
   def isDeleted(f: Int): Boolean = (flags.deleted & f) != 0
 
-
-  /** An int as block address. */
-  def address(a: Int) : Short = a.toShort
-
   /** Allocate a buffer with standard size for the FFS format. */
   def blockBuffer(): ByteBuffer = ByteBuffer.allocate(BLOCKSIZE)
   def entryBuffer(): ByteBuffer = ByteBuffer.allocate(FileEntry.ENTRY_BYTES)
 
   /**
-    * Apply a series of operations on a ByteBuffer and return a read-only version of the buffer with position set to 0.
+    * Apply operations on a ByteBuffer for blocks and return a read-only version of the buffer with position set to 0.
     *
     * @param f operations to apply
     * @return
