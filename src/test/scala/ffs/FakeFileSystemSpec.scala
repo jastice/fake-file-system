@@ -1,6 +1,5 @@
 package ffs
 
-import ffs.impl.File
 import org.scalatest.{FunSpec, SequentialNestedSuiteExecution}
 
 class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {

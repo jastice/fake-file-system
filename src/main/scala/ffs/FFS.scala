@@ -21,14 +21,19 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
   /** List all files within `path`. If path is a file, list that. */
   def ls(path: String): Seq[FileNode] = {
 
-    // TODO recurse to given path
-
     withIO { io =>
-      fileFromRoot(io)(header,Path(path))
-      header.rootBlockAddresses
-        .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
-        .filter(!_.deleted)
-        .map { e => if (e.dir) Directory(e.name) else File(e.name) }
+      val found = fileFromRoot(io)(header,Path(path))
+
+      found.map { case (entry,block) =>
+        if (entry.deleted)
+          Vector.empty[FileNode]
+        else if (entry.dir)
+          block.dataBlocks
+            .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
+            .filter(!_.deleted)
+            .map { e => if (e.dir) Directory(e.name) else File(e.name) }
+        else Vector(File(entry.name))
+      }.getOrElse(Vector.empty[FileNode])
     }
   }
 
