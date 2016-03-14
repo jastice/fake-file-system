@@ -12,19 +12,16 @@ import FFS._
   * Currently not thread-safe. Possible solution: make operations synchronized, check for / wait on file locks,
   * have only one instance per physical file.
   */
-class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private[ffs] val freeMap: FreeMap) {
-
-  /** Set a block as blocked or free in the freeMap. */
-  private def updateBlock(address: Int, blocked: Boolean): Unit = ???
+class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private[ffs] val freeMap: FreeMap) {
 
 
   /** List all files within `path`. If path is a file, list that. */
   def ls(path: String): Seq[FileNode] = {
     val myPath = Path(path)
-    require(paths.valid(myPath))
+    require(paths.valid(myPath), "not a valid path (filename too long?)")
 
 
-    withIO { io =>
+    readWithIO { io =>
       def fileNodes(addresses: Vector[Int]) =
         fileEntries(io)(addresses)
           .map { e => if (e.dir) Directory(e.name) else File(e.name) }
@@ -32,12 +29,14 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
       if (myPath.parts.isEmpty) // ls on root dir
         fileNodes(header.rootBlockAddresses)
       else {
-        fileFromRoot(io)(header,myPath)
-          .map { case (entry,block) =>
+        fileFromRoot(io,myPath)
+          .map { entry =>
             if (entry.deleted)
               Vector.empty[FileNode]
-            else if (entry.dir)
-              fileNodes(block.dataBlocks)
+            else if (entry.dir) {
+              val block = DirectoryIndexBlock(io.getBlock(entry.address))
+              fileNodes(block.blockAddresses)
+            }
             else Vector(File(entry.name))
       }
 
@@ -50,11 +49,11 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
 
   /** Create directory in at path. Path must be directory itself. */
   def mkdir(path: String): Unit =
-    createEntry(Path(path), dir = true)
+    createFile(Path(path), dir = true)
 
   /** Create empty file at path. */
   def touch(path: String): Unit =
-    createEntry(Path(path), dir = false)
+    createFile(Path(path), dir = false)
 
   def cp(from: String, to: String): Unit = ???
 
@@ -62,50 +61,96 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
 
   /** Delete a file. */
   def rm(path: String): Unit = {
-    // mark file as deleted in index
-    // mark all its blocks as free
     ???
   }
 
   /** Find an entry slot at `path` and create a file or directory for the name part of path. */
-  private def createEntry(path: Path, dir: Boolean): Unit = {
+  private def createFile(path: Path, dir: Boolean): Unit = {
 
-    // TODO recurse to last part before creating
+    val parentPath = path.parts.init
     val name = path.parts.last
 
-    val fileBlockAddress = freeMap.takeBlocks(1).head // TODO error handling?
-    val fileBlock = FileBlock(0, Vector(), 0)
-    val fileEntry = FileEntry(name, dir = dir, deleted = false, fileBlockAddress)
-    
-    mutateWithIO { io =>
-      // TODO don't allow re-creation of existing filenames
-      // TODO create files anywhere in the hierarchy
-      // find an block with entry to update
-      header.rootBlockAddresses.iterator // iterator for lazy semantics
-        .map { a => (a, DirectoryBlock(io.getBlock(a))) }
-        .collectFirst {
-          case (address, dirBlock) if dirBlock.files.exists(_.deleted) =>
-            val newBlock =
-              dirBlock.files.zipWithIndex
-                .find { case (entry, i) => entry.deleted }
-                .map { case (entry, i) =>
-                  val newEntries = dirBlock.files.updated(i, fileEntry)
-                  dirBlock.copy(files = newEntries)
-                }
-            (address, newBlock.get) // I'm pretty sure it's safe :P
+    val fileBlockAddress = freeMap.takeBlocks(1).head // YOLO
+    // TODO release block in error case
 
-          case (address, dirBlock) if dirBlock.files.size < DirectoryBlock.MAX_ENTRIES =>
-            val newBlock = dirBlock.copy(dirBlock.files :+ fileEntry)
-            (address, newBlock)
+    // FIXME correct parent address pls
+
+    mutateWithIO { io =>
+
+      // TODO proper error on non-existent directory
+
+      val (parentBlockAddress, parentBlock) =
+        if (parentPath.isEmpty) (0,header)
+        else {
+          val parentEntry = fileFromRoot(io, Path(path.parts.init)).get // YOLO
+          (parentEntry.address, DirectoryIndexBlock(io.getBlock(parentEntry.address)))
         }
-        .foreach { case (address,dirBlock) =>
-          io.writeBlock(address,dirBlock)
-          io.writeBlock(fileBlockAddress, fileBlock)
+
+      val fileBlock =
+        if (dir) DirectoryIndexBlock(parentBlockAddress,Vector(),0)
+        else FileBlock(parentBlockAddress, Vector(), 0)
+      val fileEntry = FileEntry(name, dir = dir, deleted = false, fileBlockAddress)
+
+      val updates = findOrCreateBlockAndUpdateEntry(io, parentBlock, fileEntry)
+
+      updates.foreach { case (updatedBlockAddress, updatedBlock, updatedParent) =>
+        io.writeBlock(updatedBlockAddress, updatedBlock)
+        io.writeBlock(fileBlockAddress, fileBlock)
+        if (updatedParent != parentBlock) {
+          if (parentBlockAddress == 0) {
+            header = updatedParent.asInstanceOf[HeaderBlock]
+            io.writeBlock(parentBlockAddress,header)
+          } else
+            io.writeBlock(parentBlockAddress,updatedParent.asInstanceOf[DirectoryIndexBlock])
         }
+      }
     }
   }
 
-  private def withIO[A](f: IO => A): A = IO.withIO(physical)(f)
+
+  /** Find a directory block among addresses that has a free or deleted entry slot
+    * and update it with given entry.
+    *
+    * @return (updated block address, updated directory block, possibly updated parent)
+    */
+  private def findOrCreateBlockAndUpdateEntry(io: IO, parent: DirIndex, fileEntry: FileEntry): Option[(Int,DirectoryBlock,DirIndex)] = {
+    parent.blockAddresses.iterator // iterator for lazy semantics
+      .map { address => (address, DirectoryBlock(io.getBlock(address))) }
+      .collectFirst {
+        case (address, dirBlock) if dirBlock.files.exists(_.deleted) =>
+          val index = dirBlock.files.indexWhere(_.deleted) // duplicated work with .exists
+          val updatedFiles = dirBlock.files.updated(index, fileEntry)
+          val updatedDirBlock = dirBlock.copy(files = updatedFiles)
+          (address, updatedDirBlock, parent)
+
+        case (address, dirBlock) if dirBlock.files.size < DirectoryBlock.MAX_ENTRIES =>
+          val updatedDirBlock = dirBlock.copy(dirBlock.files :+ fileEntry)
+          (address, updatedDirBlock, parent)
+      }
+      .orElse {
+        // create a new dirblock
+        if (parent.blockCount < parent.maxBlockCount) {
+          val newDirBlockAddress = freeMap.takeBlocks(1).head // YOLO
+          val newDirBlock = DirectoryBlock(Vector(fileEntry))
+          val updatedIndex = parent.addDirBlock(newDirBlockAddress)
+          Some((newDirBlockAddress, newDirBlock, updatedIndex))
+        }
+        else None
+      }
+  }
+
+  /** Find directory block containing file with `name`. */
+  private def dirBlockForName(io: IO, addresses: Vector[Int], name: String): Option[(Int,DirectoryBlock)] = {
+    addresses.iterator
+      .map { a => (a, DirectoryBlock(io.getBlock(a))) }
+      .find { case (address,dirBlock) => dirBlock.files.exists(_.name == name) }
+  }
+
+
+  private def fileFromRoot(io: IO, path: Path): Option[FileEntry] =
+    fileForPath(io)(header.rootBlockAddresses, path.parts)
+
+  private def readWithIO[A](f: IO => A): A = IO.withIO(physical)(f)
 
   /** Perform mutation operations with an IO, write the changed filesystem metadata, and close IO. */
   private def mutateWithIO[A](f: IO => A): A = IO.withIO(physical) { io =>
@@ -116,7 +161,6 @@ class FFS private(physical: JFile, private[ffs] val header: HeaderBlock, private
   }
 
 }
-
 
 
 object FFS {
@@ -192,23 +236,23 @@ object FFS {
   }
 
 
-  private def fileFromRoot(io: IO)(header: HeaderBlock, path: Path): Option[(FileEntry,FileBlock)] =
-    fileForPath(io)(header.rootBlockAddresses, path.parts)
-
-  /** Get the file entry and block describing the file referenced by `path` below `parent`. */
-  private def fileForPath(io: IO)(addresses: Vector[Int], path: Vector[String]): Option[(FileEntry,FileBlock)] = {
+  /** Get the file entry describing the file referenced by `path` among `addresses`, recursively. */
+  private def fileForPath(io: IO)(addresses: Vector[Int], path: Vector[String]): Option[FileEntry] = {
     if (path.isEmpty) None
     else {
       val name = path.head
       addresses
         .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
-        .find { entry => !entry.deleted && entry.name == name }
-        .flatMap { entry =>
+        .find { case entry => !entry.deleted && entry.name == name }
+        .flatMap { case entry =>
           val restPath = path.tail
-          val block = FileBlock(io.getBlock(entry.address))
-          if (restPath.isEmpty) Some((entry,block))
-          else if (entry.dir) fileForPath(io)(block.dataBlocks, restPath)
-          else None // not a dir here, can't complete path recursion
+          if (restPath.nonEmpty) {
+            if (entry.dir) {
+              val block = DirectoryIndexBlock(io.getBlock(entry.address))
+              fileForPath(io)(block.blockAddresses, restPath)
+            } else None // not a dir here, can't complete path recursion
+          }
+          else Some(entry)
         }
     }
   }

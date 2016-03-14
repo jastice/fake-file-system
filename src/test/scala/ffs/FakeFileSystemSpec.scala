@@ -53,7 +53,17 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         fs.mkdir(s"/$dirName")
         assert(fs.ls("/") contains Directory(dirName))
       }
+    }
 
+    it("can create nested directories") {
+      val dirName = "augh"
+      withFFS { fs =>
+        fs.mkdir("/nest1")
+        fs.mkdir("/nest1/nest2")
+        fs.mkdir("/nest1/nest2/nest3")
+        fs.mkdir(s"/nest1/nest2/nest3/$dirName")
+        assert(fs.ls("/nest1/nest2/nest3") contains Directory(dirName))
+      }
     }
   }
 

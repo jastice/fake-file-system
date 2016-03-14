@@ -14,6 +14,13 @@ sealed abstract class Block {
   def toBytes: ByteBuffer
 }
 
+sealed trait DirIndex {
+  def blockAddresses: Vector[Int]
+  def blockCount: Int
+  def maxBlockCount: Int
+  def addDirBlock(block: Int): DirIndex
+}
+
 /**
   * The first block in the file.
   * Contains some information about the file format and addresses of "layout blocks".
@@ -21,14 +28,14 @@ sealed abstract class Block {
   * @param blockCount number of blocks in the fake file system
   * @param rootBlockAddresses block addresses of directory root
   */
-case class HeaderBlock(blockCount: Int, rootBlockAddresses: Vector[Int]) extends Block {
+case class HeaderBlock(blockCount: Int, rootBlockAddresses: Vector[Int]) extends Block with DirIndex {
 
-  private val availableRootBlockAddresses = (BLOCKSIZE - 12) / 4
+  import HeaderBlock.MAX_ROOT_BLOCK_ADDRESSES
 
   override def toBytes = {
     val rbaSize = rootBlockAddresses.size
-    require(rbaSize <= availableRootBlockAddresses,
-      s"tried to create HeaderBlock with too many root directory blocks ($rbaSize). Maximum available: $availableRootBlockAddresses")
+    require(rbaSize <= MAX_ROOT_BLOCK_ADDRESSES,
+      s"tried to create HeaderBlock with too many root directory blocks ($rbaSize). Maximum available: $MAX_ROOT_BLOCK_ADDRESSES")
 
     returningBuffer { b =>
       b.putShort(MAGIC) // 2B
@@ -44,9 +51,18 @@ case class HeaderBlock(blockCount: Int, rootBlockAddresses: Vector[Int]) extends
       }
     }
   }
+
+  override val blockAddresses: Vector[Int] = rootBlockAddresses
+
+  override val maxBlockCount: Int = MAX_ROOT_BLOCK_ADDRESSES
+
+  override def addDirBlock(block: Int): DirIndex =
+    copy(blockCount = blockCount+1, rootBlockAddresses = rootBlockAddresses :+ block)
 }
 
 object HeaderBlock {
+
+  val MAX_ROOT_BLOCK_ADDRESSES = (BLOCKSIZE - 12) / 4
 
   def apply(bytes: ByteBuffer): HeaderBlock = {
     val myMagic = bytes.getShort
@@ -65,14 +81,15 @@ object HeaderBlock {
 }
 
 
-/** A file block represents either a regular file or a directory.
+/** A file block represents either a regular file.
   *
   * @param parentBlock the parent directory of this file
   * @param dataBlocks addresses of data or directory blocks
-  * */
+  * @param fileSize for regular file, file size in bytes. For directory, number of
+  */
 case class FileBlock(parentBlock: Int, dataBlocks: Vector[Int], fileSize: Int) extends Block {
+  require(dataBlocks.size <= FileBlock.MAX_FILE_BLOCKS)
   override def toBytes = {
-    require(dataBlocks.size <= FileBlock.maxFileBlocks)
 
     returningBuffer { b =>
       b.putInt(parentBlock)
@@ -88,7 +105,7 @@ case class FileBlock(parentBlock: Int, dataBlocks: Vector[Int], fileSize: Int) e
 
 object FileBlock {
 
-  val maxFileBlocks = (BLOCKSIZE - 8) / 4 // 2 ints are reserved, 2 int per block address
+  val MAX_FILE_BLOCKS = (BLOCKSIZE - 8) / 4 // 2 ints are reserved, 2 int per block address
 
   def apply(bytes: ByteBuffer): FileBlock = {
     val myParent = bytes.getInt
@@ -97,6 +114,38 @@ object FileBlock {
 
     val myDataBlocks = (0 until nBlocks).foldLeft(Vector.empty[Int]) { (acc,i) => acc :+ bytes.getInt }
     FileBlock(myParent, myDataBlocks, mySize)
+  }
+}
+
+case class DirectoryIndexBlock(parentBlock: Int, dirBlocks: Vector[Int], blockCount: Int) extends Block with DirIndex {
+  require(dirBlocks.size <= DirectoryIndexBlock.MAX_DIRINDEX_BLOCKS)
+
+  override def toBytes = returningBuffer { b =>
+    b.putInt(parentBlock)
+    b.putInt(blockCount)
+
+    // TODO check dir size
+    dirBlocks.foreach(b.putInt)
+  }
+
+  override val blockAddresses: Vector[Int] = dirBlocks
+
+  override val maxBlockCount: Int = DirectoryIndexBlock.MAX_DIRINDEX_BLOCKS
+
+  override def addDirBlock(block: Int): DirIndex =
+    copy(dirBlocks = dirBlocks :+ block, blockCount = blockCount + 1)
+}
+
+object DirectoryIndexBlock {
+  val MAX_DIRINDEX_BLOCKS = (BLOCKSIZE - 8) / 4 // 2 ints are reserved, 2 int per block address
+
+  def apply(bytes: ByteBuffer): DirectoryIndexBlock = {
+    val myParent = bytes.getInt
+    val myBlockCount = bytes.getInt
+
+    val myDataBlocks = (0 until myBlockCount).foldLeft(Vector.empty[Int]) { (acc,i) => acc :+ bytes.getInt }
+    DirectoryIndexBlock(myParent, myDataBlocks, myBlockCount)
+
   }
 }
 
@@ -167,7 +216,7 @@ case class FileEntry(name: String, dir: Boolean, deleted: Boolean, address: Int)
 
 object FileEntry {
 
-  val ENTRY_BYTES = 4 + FILENAME_BYTES + 4 // flags + name + address
+  val ENTRY_BYTES = 4 + 4 + FILENAME_BYTES // flags + name + address
 
   def apply(bytes: ByteBuffer): Option[FileEntry] = {
 
