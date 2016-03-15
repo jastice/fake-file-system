@@ -97,6 +97,7 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
         io.writeBlock(updatedBlockAddress, updatedBlock)
         io.writeBlock(fileBlockAddress, fileBlock)
         if (updatedParent != parentBlock) {
+          // this block YOLO
           if (parentBlockAddress == 0) {
             header = updatedParent.asInstanceOf[HeaderBlock]
             io.writeBlock(parentBlockAddress,header)

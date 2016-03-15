@@ -118,7 +118,7 @@ object FileBlock {
 }
 
 case class DirectoryIndexBlock(parentBlock: Int, dirBlocks: Vector[Int], blockCount: Int) extends Block with DirIndex {
-  require(dirBlocks.size <= DirectoryIndexBlock.MAX_DIRINDEX_BLOCKS)
+  require(dirBlocks.size <= DirectoryIndexBlock.MAX_DIRECTORY_BLOCKS)
 
   override def toBytes = returningBuffer { b =>
     b.putInt(parentBlock)
@@ -130,14 +130,14 @@ case class DirectoryIndexBlock(parentBlock: Int, dirBlocks: Vector[Int], blockCo
 
   override val blockAddresses: Vector[Int] = dirBlocks
 
-  override val maxBlockCount: Int = DirectoryIndexBlock.MAX_DIRINDEX_BLOCKS
+  override val maxBlockCount: Int = DirectoryIndexBlock.MAX_DIRECTORY_BLOCKS
 
   override def addDirBlock(block: Int): DirIndex =
     copy(dirBlocks = dirBlocks :+ block, blockCount = blockCount + 1)
 }
 
 object DirectoryIndexBlock {
-  val MAX_DIRINDEX_BLOCKS = (BLOCKSIZE - 8) / 4 // 2 ints are reserved, 2 int per block address
+  val MAX_DIRECTORY_BLOCKS = (BLOCKSIZE - 8) / 4 // 2 ints are reserved, 2 int per block address
 
   def apply(bytes: ByteBuffer): DirectoryIndexBlock = {
     val myParent = bytes.getInt
