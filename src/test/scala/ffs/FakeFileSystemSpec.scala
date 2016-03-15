@@ -1,5 +1,6 @@
 package ffs
 
+import ffs.impl.{DirectoryIndexBlock, DirectoryBlock}
 import org.scalatest.{FunSpec, SequentialNestedSuiteExecution}
 
 class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
@@ -29,7 +30,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         val fs1 = FFS.initialize(file, 1024 * 512)
         val fs2 = FFS.open(file)
 
-        assert(fs1.header == fs2.header)
+        assert(fs1.header == fs2)
       }
     }
     // TODO reading existent files
@@ -63,6 +64,16 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         fs.mkdir("/nest1/nest2/nest3")
         fs.mkdir(s"/nest1/nest2/nest3/$dirName")
         assert(fs.ls("/nest1/nest2/nest3") contains Directory(dirName))
+      }
+    }
+
+    it("can create maximum number of subdirs in a dir") {
+      val maxFiles = DirectoryIndexBlock.MAX_DIRECTORY_BLOCKS * DirectoryBlock.MAX_ENTRIES
+
+      withFFS { fs =>
+        val testDir = "/testy"
+        fs.mkdir(testDir)
+        (0 until maxFiles).foreach { i => fs.mkdir(s"$testDir/d$i")}
       }
     }
   }
