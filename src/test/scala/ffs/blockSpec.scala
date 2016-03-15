@@ -38,6 +38,12 @@ class blockSpec extends FunSpec with GeneratorDrivenPropertyChecks{
 
       assert(DirectoryBlock(block.toBytes) == block)
     }
+
+    it("full DirectoryBlock") {
+      val files = (1 to DirectoryBlock.MAX_ENTRIES).map { i => FileEntry(s"f$i", false, false, i) }.toVector
+      val block = DirectoryBlock(files)
+      assert(DirectoryBlock(block.toBytes) == block)
+    }
   }
 
 }

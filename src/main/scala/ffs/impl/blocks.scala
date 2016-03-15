@@ -163,7 +163,8 @@ object DirectoryBlock {
   val MAX_ENTRIES = ceilingDiv(BLOCKSIZE, FileEntry.ENTRY_BYTES)
 
   private def readEntries(collected: Vector[FileEntry], bytes: ByteBuffer): Vector[FileEntry] = {
-    FileEntry(bytes) match {
+    if (bytes.remaining() < FileEntry.ENTRY_BYTES) collected
+    else FileEntry(bytes) match {
       case Some(e: FileEntry) => readEntries(collected :+ e, bytes)
       case None => collected
     }

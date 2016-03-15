@@ -30,10 +30,10 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         val fs1 = FFS.initialize(file, 1024 * 512)
         val fs2 = FFS.open(file)
 
-        assert(fs1.header == fs2)
+        assert(fs1.header == fs2.header)
       }
     }
-    // TODO reading existent files
+    // TODO reading existent files, writing new files
   }
 
   describe("touch") {
