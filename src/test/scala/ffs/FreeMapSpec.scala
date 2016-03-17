@@ -105,6 +105,12 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       )
     }
 
+    it("returns empty vector if too many blocks requested") {
+      val size = 3333
+      val n = 3456
+      val freemap = FreeMap(size)
+      assert(freemap.takeBlocks(n).isEmpty)
+    }
 
   }
 
