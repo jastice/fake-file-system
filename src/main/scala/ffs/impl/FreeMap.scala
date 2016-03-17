@@ -24,36 +24,6 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
     size - oneBits
   }
 
-  /**
-    * @param block block to set bit in
-    * @param bitAddress bit to set
-    * @return whether the bit was set in this operation (true) or already set (false)
-    */
-    private[ffs] def setBit(block: DataBlock, bitAddress: Int): Boolean = {
-    val byteAddress = bitAddress >> 3 // div 8 :)
-    val bit = bitAddress & 0x7
-    val mask = 0x80 >> bit
-    val byte = block.data(byteAddress)
-    val newByte = (mask | byte).toByte
-    block.data.update(byteAddress, newByte)
-    newByte != byte
-  }
-
-  /**
-    *
-    * @param block block to operate on
-    * @param bitAddress bit within block to clear
-    * @return whether bit was cleared (true) or already clear (false)
-    */
-  private[ffs] def clearBit(block: DataBlock, bitAddress: Int): Boolean = {
-    val byteAddress = bitAddress >> 3
-    val bit = bitAddress & 0x7
-    val mask = ~(0x80 >> bit)
-    val byte = block.data(byteAddress)
-    val newByte = (mask & byte).toByte
-    block.data.update(byteAddress, newByte)
-    newByte != byte
-  }
 
   /** Find `blocks` free blocks and mark them as taken.
     * If not enough free blocks are available, return an empty vector.
@@ -149,9 +119,9 @@ object FreeMap {
 
     val freeMapBlocks = Vector.fill(nFreeMapBlocks)(DataBlock(Array.ofDim[Byte](BLOCKSIZE)))
     val reservedBlocks = 1 + freeMapBlocks.size // header block + FreeMap itself
-    val freeMap = new FreeMap(freeMapBlocks, size)
     val firstBlock = freeMapBlocks(0)
-    (0 until reservedBlocks).map { i => freeMap.setBit(firstBlock, i) }
+    (0 until reservedBlocks).map { i => setBit(firstBlock, i) }
+    val freeMap = new FreeMap(freeMapBlocks, size)
 
     freeMap
   }
@@ -173,6 +143,37 @@ object FreeMap {
   def num1Bits(b: Byte): Int = {
     (1 & b)        + (1 & (b >> 1)) + (1 & (b >> 2)) + (1 & (b >> 3)) +
     (1 & (b >> 4)) + (1 & (b >> 5)) + (1 & (b >> 6)) + (1 & (b >> 7))
+  }
+
+  /**
+    * @param block block to set bit in
+    * @param bitAddress bit to set
+    * @return whether the bit was set in this operation (true) or already set (false)
+    */
+  private[ffs] def setBit(block: DataBlock, bitAddress: Int): Boolean = {
+    val byteAddress = bitAddress >> 3 // div 8 :)
+    val bit = bitAddress & 0x7
+    val mask = 0x80 >> bit
+    val byte = block.data(byteAddress)
+    val newByte = (mask | byte).toByte
+    block.data.update(byteAddress, newByte)
+    newByte != byte
+  }
+
+  /**
+    *
+    * @param block block to clear bit in
+    * @param bitAddress bit within block to clear
+    * @return whether bit was cleared (true) or already clear (false)
+    */
+  private[ffs] def clearBit(block: DataBlock, bitAddress: Int): Boolean = {
+    val byteAddress = bitAddress >> 3
+    val bit = bitAddress & 0x7
+    val mask = ~(0x80 >> bit)
+    val byte = block.data(byteAddress)
+    val newByte = (mask & byte).toByte
+    block.data.update(byteAddress, newByte)
+    newByte != byte
   }
 
 }

@@ -17,6 +17,21 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val reserved = 3 // header + freemap
       val freemap = FreeMap(size)
       assert(freemap.countFree == size - reserved)
+
+    }
+
+  }
+
+  describe("internal state") {
+    it("free variable is updated correctly and == countFree method") {
+      val size = 7096 // two freemap blocks, one not full
+      val freemap = FreeMap(size)
+      val freeBefore = freemap.free
+      assert(freemap.countFree == freeBefore)
+      freemap.takeBlocks(17)
+      val freeAfter = freemap.free
+      assert(freemap.countFree == freeAfter)
+      assert(freeBefore-17 == freeAfter)
     }
   }
 
@@ -51,7 +66,41 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       assert(
         freemap.takeBlocks(171).forall { b =>
           val (block,blockBit) = blockAddress(b)
-          !freemap.setBit(freemap.blocks(block), blockBit)
+          !setBit(freemap.blocks(block), blockBit)
+        }
+      )
+    }
+
+    it("works for large number of blocks at once") {
+      val n = 9732
+      val t = 8888
+      val freemap = FreeMap(n)
+      val initialFree = freemap.free
+
+      val taken = freemap.takeBlocks(t)
+      assert(freemap.free == initialFree - t)
+      assert(
+        taken.forall { b =>
+          val (block,blockBit) = blockAddress(b)
+          !setBit(freemap.blocks(block), blockBit)
+        }
+      )
+    }
+
+    it("works for large number of blocks one at a time") {
+      val n = 9732
+      val t = 8888
+      val freemap = FreeMap(n)
+      val taken = (1 to t).map { i =>
+        val took = freemap.takeBlocks(1).head
+        took
+      }
+
+      assert(freemap.free == n-t)
+      assert(
+        taken.forall { b =>
+          val (block,blockBit) = blockAddress(b)
+          !setBit(freemap.blocks(block), blockBit)
         }
       )
     }
@@ -66,7 +115,7 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val block = freemap.blocks.head
       val byte = 73
       val bit = 0
-      freemap.setBit(block, byte*8+bit)
+      setBit(block, byte*8+bit)
       assert(block.data(byte) == 0x80.toByte)
     }
 
@@ -75,21 +124,21 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val blk = freemap.blocks.head
       val byte = 77
       val bit = 7
-      freemap.setBit(blk, byte*8+bit)
+      setBit(blk, byte*8+bit)
       assert(blk.data(byte) == 1)
     }
 
     it("setting a clear bit returns true") {
       val freemap = FreeMap(7732)
       val block = freemap.blocks.head
-      assert(freemap.setBit(block,3732))
+      assert(setBit(block,3732))
     }
 
     it("setting a set bit returns false") {
       val freemap = FreeMap(7732)
       val block = freemap.blocks.head
-      freemap.setBit(block,3732)
-      assert(! freemap.setBit(block,3732))
+      setBit(block,3732)
+      assert(!setBit(block,3732))
     }
   }
 
@@ -101,7 +150,7 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val byte = 73
       val bit = 0
       block.data.update(byte,0xFF.toByte)
-      freemap.clearBit(block, byte*8+bit)
+      clearBit(block, byte*8+bit)
       assert(block.data(byte) == 0x7F.toByte)
     }
 
@@ -111,7 +160,7 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val byte = 73
       val bit = 7
       block.data.update(byte,0xFF.toByte)
-      freemap.clearBit(block, byte*8+bit)
+      clearBit(block, byte*8+bit)
       assert(block.data(byte) == ~1.toByte)
     }
 
@@ -121,23 +170,23 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val block = freemap.blocks.head
       val byte = 77
       val bit = 4
-      freemap.setBit(block, byte*8+bit)
+      setBit(block, byte*8+bit)
       assert(block.data(byte) == 8)
-      freemap.clearBit(block, byte*8+bit)
+      clearBit(block, byte*8+bit)
       assert(block.data(byte) == 0)
     }
 
     it("clearing a clear bit returns false") {
       val freemap = FreeMap(7732)
       val block = freemap.blocks.head
-      assert(! freemap.clearBit(block,3732))
+      assert(! clearBit(block,3732))
     }
 
     it("clearing a set bit returns true") {
       val freemap = FreeMap(7732)
       val block = freemap.blocks.head
-      freemap.setBit(block,3732)
-      assert(freemap.clearBit(block,3732))
+      setBit(block,3732)
+      assert(clearBit(block,3732))
     }
   }
 
