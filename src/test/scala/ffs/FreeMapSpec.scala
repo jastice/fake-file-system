@@ -17,9 +17,7 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
       val reserved = 3 // header + freemap
       val freemap = FreeMap(size)
       assert(freemap.countFree == size - reserved)
-
     }
-
   }
 
   describe("internal state") {
@@ -88,15 +86,17 @@ class FreeMapSpec extends FunSpec with GeneratorDrivenPropertyChecks {
     }
 
     it("works for large number of blocks one at a time") {
-      val n = 9732
+      val size = 9732
       val t = 8888
-      val freemap = FreeMap(n)
+      val freemap = FreeMap(size)
+      val initialFree = freemap.free
       val taken = (1 to t).map { i =>
-        val took = freemap.takeBlocks(1).head
-        took
+        val took = freemap.takeBlocks(1)
+        assert(freemap.free == initialFree-i)
+        took.head
       }
 
-      assert(freemap.free == n-t)
+      assert(freemap.free == initialFree-t)
       assert(
         taken.forall { b =>
           val (block,blockBit) = blockAddress(b)

@@ -37,12 +37,12 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
       var collected = 0
       var b = 0
 
-      while(b < blocks.size) {
+      while(b < blocks.size && collected < n) {
         val data = blocks(b).data
         val blockZero = blockBits*b
         // the last block may not be completely filled
         var i = 0
-        while (blockZero + i < BLOCKSIZE && collected < n) {
+        while (i < BLOCKSIZE && collected < n) {
           val byte = data(i)
           val added = (if (byte != 0xFF.toByte) freeBits(byte) else Vector.empty).map{ k => blockZero + i*8 + k }
           result ++= added
@@ -53,11 +53,14 @@ class FreeMap(private[ffs] val blocks: Vector[DataBlock], size: Int) {
       }
 
       val resultBlocks = result.take(n)
+      assert(resultBlocks.size == n, s"result size was ${result.size}, expected $n")
+
       resultBlocks.foreach { blk =>
         val (blockAddr,addrInBlock) = blockAddress(blk)
         setBit(blocks(blockAddr),addrInBlock)
       }
       free -= n
+
       resultBlocks
     }
   }

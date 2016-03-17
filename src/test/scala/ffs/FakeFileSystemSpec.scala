@@ -69,12 +69,15 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
 
     it("can create maximum number of subdirs in a dir") {
       val maxFiles = DirectoryIndexBlock.MAX_DIRECTORY_BLOCKS * DirectoryBlock.MAX_ENTRIES
+      val testDir = "/testy"
 
       withFFS { fs =>
-        val testDir = "/testy"
         fs.mkdir(testDir)
         (0 until maxFiles).foreach { i => fs.mkdir(s"$testDir/d$i")}
+
+        assert(fs.ls(testDir).size == maxFiles)
       }
+
     }
   }
 
