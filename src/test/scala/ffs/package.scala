@@ -1,5 +1,4 @@
 import java.io.{File => JFile}
-
 import ffs.impl.IO
 
 /**
@@ -31,7 +30,7 @@ package object ffs {
 
   /** Provide a FFS on a temporary file. */
   def withFFS(f: FFS => Unit): Unit = withFile { file =>
-    val fs = FFS.initialize(file, 1024*512)
+    val fs = FFS.initialize(file, 16384*512)
     f(fs)
   }
 
