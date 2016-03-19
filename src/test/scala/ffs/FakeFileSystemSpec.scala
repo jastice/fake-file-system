@@ -123,6 +123,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       withFFS { fs =>
         fs mkdir "/boo"
         fs mkdir "/boo/far"
+        fs touch "/boo/far/dummy" // to make sure dir block exists
         val filesBefore = fs ls "/boo/far"
         val freeBefore = fs.freeMap.free
         fs touch "/boo/far/toddles"
@@ -158,13 +159,13 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
 
     it("deletes an empty dir with a deleted file") {
       withFFS { fs =>
-        fs mkdir "/boo"
         val freeBefore = fs.freeMap.free
+        fs mkdir "/boo"
         fs touch "/boo/far"
         assert(fs rm "/boo/far")
         assert(fs rm "/boo")
-        val filesAfter = fs ls "/boo"
-        assert(filesAfter.isEmpty)
+        val filesAfter = fs ls "/"
+        assert(! (filesAfter contains Directory("boo")))
         assert(freeBefore == fs.freeMap.free)
       }
     }
