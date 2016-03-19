@@ -110,7 +110,7 @@ object FileBlock {
   def apply(bytes: ByteBuffer): FileBlock = {
     val myParent = bytes.getInt
     val mySize = bytes.getInt
-    val nBlocks = ceilingDiv(mySize,BLOCKSIZE)
+    val nBlocks = ceilingDiv(mySize, BLOCKSIZE)
 
     val myDataBlocks = (0 until nBlocks).foldLeft(Vector.empty[Int]) { (acc,i) => acc :+ bytes.getInt }
     FileBlock(myParent, myDataBlocks, mySize)

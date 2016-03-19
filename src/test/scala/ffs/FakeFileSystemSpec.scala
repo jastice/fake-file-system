@@ -94,7 +94,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       }
     }
 
-    it("deletes an empty file") {
+    it("deletes an empty file in root") {
       withFFS { fs =>
         fs touch "/dummy" // to make sure a dir block exists
         val filesBefore = fs ls "/"
@@ -111,7 +111,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         val filesBefore = fs ls "/"
         val freeBefore = fs.freeMap.free
         fs touch "/boo"
-        fail("implement file writing")
+        fail("TODO implement file writing")
         assert(fs rm "/boo")
         val filesAfter = fs ls "/"
         assert(filesBefore == filesAfter)
@@ -156,7 +156,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       }
     }
 
-    it("deleted an empty dir with a deleted file") {
+    it("deletes an empty dir with a deleted file") {
       withFFS { fs =>
         fs mkdir "/boo"
         val freeBefore = fs.freeMap.free
