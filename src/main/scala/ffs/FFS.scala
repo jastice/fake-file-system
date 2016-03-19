@@ -45,8 +45,15 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
     }
   }
 
-  /** Recursively list all files below `path`, with their full path name. */
-  def lsr(path: String): Seq[String] = ???
+  /** Size of file. Always 0 for directories. */
+  def size(path: String): Int = {
+    val filePath = Path(path)
+    readWithIO { io =>
+      val Some(fileEntry) = fileFromRoot(io, filePath) // YOLO
+      if (fileEntry.dir) 0
+      else FileBlock(io.getBlock(fileEntry.address)).fileSize
+    }
+  }
 
   /** Create directory in at path. Path must be directory itself. */
   def mkdir(path: String): Boolean =
@@ -125,25 +132,31 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
 
       val fileBlock = FileBlock(io.getBlock(fileEntry.address))
 
-      val lastBlockFilled = fileBlock.fileSize % BLOCKSIZE
-      val availableBytes = BLOCKSIZE - lastBlockFilled
-      val bytesNeedBlocks = bytes.length - availableBytes
-      val blocksNeeded = common.ceilingDiv(bytesNeedBlocks, BLOCKSIZE)
-      val blocksToFill = freeMap.takeBlocks(blocksNeeded)
+      val (consumedBytes, initialUpdatedBlock) =
+        if (fileBlock.dataBlocks.nonEmpty) {
+          val lastBlockFilled = fileBlock.fileSize % BLOCKSIZE
+          val availableBytes = BLOCKSIZE - lastBlockFilled
 
-      val initialUpdatedBlock =
-        if (fileBlock.fileSize > 0) {
           val firstBlockIndex = fileBlock.dataBlocks.last
           val firstBlock = DataBlock(io.getBlock(firstBlockIndex))
           val firstBlockBuffer = ByteBuffer.wrap(firstBlock.data)
-          firstBlockBuffer.position()
           firstBlockBuffer.position(lastBlockFilled + 1)
           firstBlockBuffer.put(bytes, 0, availableBytes)
-          Vector((firstBlockIndex,DataBlock(firstBlockBuffer.array())))
-        } else Vector.empty[(Int,DataBlock)]
 
-      val updatedBlocks = initialUpdatedBlock ++
-        blocksToFill.foldLeft((Vector.empty[(Int,DataBlock)], availableBytes+1)) { case ((acc,bytesOffset),blockIndex) =>
+
+          ( availableBytes, Vector((firstBlockIndex,DataBlock(firstBlockBuffer.array()))) )
+        } else (0, Vector.empty)
+
+      val bytesNeedBlocks = bytes.length - consumedBytes
+      val blocksNeeded = common.ceilingDiv(bytesNeedBlocks, BLOCKSIZE)
+      val blocksToFill = freeMap.takeBlocks(blocksNeeded)
+
+      val updatedFileBlock = fileBlock.copy(
+        dataBlocks = fileBlock.dataBlocks ++ blocksToFill,
+        fileSize = fileBlock.fileSize + bytes.length)
+
+      val updatedBlocks = Vector((fileEntry.address, updatedFileBlock)) ++ initialUpdatedBlock ++
+        blocksToFill.foldLeft((Vector.empty[(Int,DataBlock)], consumedBytes+1)) { case ((acc,bytesOffset),blockIndex) =>
           val block = DataBlock(io.getBlock(blockIndex))
           ByteBuffer.wrap(block.data).put(bytes, bytesOffset, BLOCKSIZE min (bytes.length-bytesOffset))
           (acc :+ (blockIndex,block), bytesOffset+BLOCKSIZE)

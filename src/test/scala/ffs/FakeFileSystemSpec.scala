@@ -1,5 +1,6 @@
 package ffs
 
+import ffs.common.constants
 import ffs.impl.{DirectoryIndexBlock, DirectoryBlock}
 import org.scalatest.{FunSpec, SequentialNestedSuiteExecution}
 
@@ -111,7 +112,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         val filesBefore = fs ls "/"
         val freeBefore = fs.freeMap.free
         fs touch "/boo"
-        fail("TODO implement file writing")
+        fs.append("/boo", Array.fill[Byte](71)(23))
         assert(fs rm "/boo")
         val filesAfter = fs ls "/"
         assert(filesBefore == filesAfter)
@@ -173,15 +174,37 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
 
   describe("append") {
     it("doesn't change anything appending empty array") {
-      fail
+      withFFS { fs =>
+        fs touch "/solomon"
+        val freeBefore = fs.freeMap.free
+        fs.append("/solomon", Array.empty[Byte])
+        assert(fs.freeMap.free == freeBefore)
+        assert((fs size "/solomon") == 0)
+      }
     }
 
-    it("changes file size") {
-      fail
+    it("changes file size with non-empty array and reduces free blocks") {
+      withFFS { fs =>
+        val bytes = Array.iterate[Byte](1,77)(b => (b+13).toByte)
+        fs touch "/silly"
+        val sizeBefore = fs size "/silly"
+        val freeBefore = fs.freeMap.free
+        fs.append("/silly", bytes)
+        assert((fs size "/silly") == sizeBefore + bytes.length)
+        assert(fs.freeMap.free == freeBefore - 1)
+      }
     }
 
-    it("reduces free blocks") {
-      fail
+    it("appends arrays larger than block size") {
+      withFFS { fs =>
+        val bytes = Array.iterate[Byte](1,constants.BLOCKSIZE*3 + 77)(b => (b+13).toByte)
+        fs touch "/silly"
+        val sizeBefore = fs size "/silly"
+        val freeBefore = fs.freeMap.free
+        fs.append("/silly", bytes)
+        assert((fs size "/silly") == sizeBefore + bytes.length)
+        assert(fs.freeMap.free == freeBefore - 4)
+      }
     }
   }
 
