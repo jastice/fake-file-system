@@ -37,12 +37,19 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
   }
 
   describe("touch") {
-    it("can create an empty file in root") {
+    it("creates an empty file in root") {
       val fileName = "bdauh"
-      withFile { file =>
-        val fs = FFS.initialize(file, 1024*512)
-        fs.touch(s"/$fileName")
-        assert(fs.ls("/") contains File(fileName))
+      withFFS { fs =>
+        assert(fs touch s"/$fileName")
+        assert(fs ls "/" contains File(fileName))
+      }
+    }
+
+    it("creates an empty file in nested dir") {
+      withFFS { fs =>
+        assert(fs mkdir "/augh")
+        assert(fs touch "/augh/bdauh")
+        assert(fs ls "/augh" contains File("bdauh"))
       }
     }
   }
@@ -51,33 +58,31 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
     it("can create an empty directory in root") {
       val dirName = "augh"
       withFFS { fs =>
-        fs.mkdir(s"/$dirName")
-        assert(fs.ls("/") contains Directory(dirName))
+        assert(fs mkdir s"/$dirName")
+        assert(fs ls "/" contains Directory(dirName))
       }
     }
 
-    it("can create nested directories") {
+    it("creates nested directories") {
       val dirName = "augh"
       withFFS { fs =>
         fs.mkdir("/nest1")
         fs.mkdir("/nest1/nest2")
         fs.mkdir("/nest1/nest2/nest3")
-        fs.mkdir(s"/nest1/nest2/nest3/$dirName")
-        assert(fs.ls("/nest1/nest2/nest3") contains Directory(dirName))
+        assert(fs mkdir s"/nest1/nest2/nest3/$dirName")
+        assert(fs ls "/nest1/nest2/nest3" contains Directory(dirName))
       }
     }
 
     it("can create maximum number of subdirs in a dir") {
       val maxFiles = DirectoryIndexBlock.MAX_DIRECTORY_BLOCKS * DirectoryBlock.MAX_ENTRIES
       val testDir = "/testy"
-
       withFFS { fs =>
         fs.mkdir(testDir)
         (0 until maxFiles).foreach { i => fs.mkdir(s"$testDir/d$i")}
 
         assert(fs.ls(testDir).size == maxFiles)
       }
-
     }
   }
 
@@ -89,15 +94,28 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       }
     }
 
-    it("deletes a file") {
+    it("deletes an empty file") {
       withFFS { fs =>
+        fs touch "/dummy" // to make sure a dir block exists
         val filesBefore = fs ls "/"
         val freeBefore = fs.freeMap.free
         fs touch "/boo"
         assert(fs rm "/boo")
+        assert(filesBefore == (fs ls "/"))
+        assert(freeBefore == fs.freeMap.free)
+      }
+    }
+
+    it("deletes a non-empty file") {
+      withFFS { fs =>
+        val filesBefore = fs ls "/"
+        val freeBefore = fs.freeMap.free
+        fs touch "/boo"
+        fail("implement file writing")
+        assert(fs rm "/boo")
         val filesAfter = fs ls "/"
         assert(filesBefore == filesAfter)
-        assert(fs.freeMap.free == freeBefore)
+        assert(freeBefore == fs.freeMap.free)
       }
     }
 
@@ -108,9 +126,10 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         val filesBefore = fs ls "/boo/far"
         val freeBefore = fs.freeMap.free
         fs touch "/boo/far/toddles"
+        assert(fs ls "/boo/far" contains File("toddles"))
         assert(fs rm "/boo/far/toddles")
-        assert((fs ls "/boo/far") == filesBefore)
-        assert(fs.freeMap.free == freeBefore)
+        assert(filesBefore == (fs ls "/boo/far"))
+        assert(freeBefore == fs.freeMap.free)
       }
     }
 
@@ -120,9 +139,8 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         val freeBefore = fs.freeMap.free
         fs mkdir "/boo"
         assert(fs rm "/boo")
-        val filesAfter = fs ls "/"
-        assert(filesBefore == filesAfter)
-        assert(fs.freeMap.free == freeBefore)
+        assert(filesBefore == (fs ls "/"))
+        assert(freeBefore == fs.freeMap.free)
       }
     }
 
@@ -130,9 +148,24 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       withFFS { fs =>
         fs mkdir "/boo"
         fs touch "/boo/far"
+        val freeBefore = fs.freeMap.free
         assert(! (fs rm "/boo"))
         val filesAfter = fs ls "/"
         assert(filesAfter contains Directory("boo"))
+        assert(freeBefore == fs.freeMap.free)
+      }
+    }
+
+    it("deleted an empty dir with a deleted file") {
+      withFFS { fs =>
+        fs mkdir "/boo"
+        val freeBefore = fs.freeMap.free
+        fs touch "/boo/far"
+        assert(fs rm "/boo/far")
+        assert(fs rm "/boo")
+        val filesAfter = fs ls "/boo"
+        assert(filesAfter.isEmpty)
+        assert(freeBefore == fs.freeMap.free)
       }
     }
   }
