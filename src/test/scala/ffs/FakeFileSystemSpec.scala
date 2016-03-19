@@ -197,7 +197,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
 
     it("appends arrays larger than block size") {
       withFFS { fs =>
-        val bytes = Array.iterate[Byte](1,constants.BLOCKSIZE*3 + 77)(b => (b+13).toByte)
+        val bytes = Array.iterate[Byte](1, constants.BLOCKSIZE*3 + 77)(b => (b+13).toByte)
         fs touch "/silly"
         val sizeBefore = fs size "/silly"
         val freeBefore = fs.freeMap.free
@@ -206,7 +206,18 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         assert(fs.freeMap.free == freeBefore - 4)
       }
     }
+
+    it("appends multiple times") {
+      withFFS{ fs =>
+        val bytes0 = Array.fill(513)(17.toByte)
+        val bytes1 = Array.fill(713)(23.toByte)
+        fs touch "/silly"
+        val sizeBefore = fs size "/silly"
+        fs.append("/silly", bytes0)
+        fs.append("/silly", bytes1)
+        assert((fs size "/silly") == sizeBefore + bytes0.length + bytes1.length)
+      }
+    }
   }
 
 }
-

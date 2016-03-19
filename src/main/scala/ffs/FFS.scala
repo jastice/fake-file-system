@@ -140,7 +140,7 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
           val firstBlockIndex = fileBlock.dataBlocks.last
           val firstBlock = DataBlock(io.getBlock(firstBlockIndex))
           val firstBlockBuffer = ByteBuffer.wrap(firstBlock.data)
-          firstBlockBuffer.position(lastBlockFilled + 1)
+          firstBlockBuffer.position(lastBlockFilled)
           firstBlockBuffer.put(bytes, 0, availableBytes)
 
 
