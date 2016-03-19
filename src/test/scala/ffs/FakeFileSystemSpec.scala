@@ -81,5 +81,61 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
     }
   }
 
+  describe("rm") {
+
+    it("does not delete root") {
+      withFFS { fs =>
+        assert(! fs.rm("/"))
+      }
+    }
+
+    it("deletes a file") {
+      withFFS { fs =>
+        val filesBefore = fs ls "/"
+        val freeBefore = fs.freeMap.free
+        fs touch "/boo"
+        assert(fs rm "/boo")
+        val filesAfter = fs ls "/"
+        assert(filesBefore == filesAfter)
+        assert(fs.freeMap.free == freeBefore)
+      }
+    }
+
+    it("deletes a file in a nested dir") {
+      withFFS { fs =>
+        fs mkdir "/boo"
+        fs mkdir "/boo/far"
+        val filesBefore = fs ls "/boo/far"
+        val freeBefore = fs.freeMap.free
+        fs touch "/boo/far/toddles"
+        assert(fs rm "/boo/far/toddles")
+        assert((fs ls "/boo/far") == filesBefore)
+        assert(fs.freeMap.free == freeBefore)
+      }
+    }
+
+    it("deletes an empty dir") {
+      withFFS { fs =>
+        val filesBefore = fs ls "/"
+        val freeBefore = fs.freeMap.free
+        fs mkdir "/boo"
+        assert(fs rm "/boo")
+        val filesAfter = fs ls "/"
+        assert(filesBefore == filesAfter)
+        assert(fs.freeMap.free == freeBefore)
+      }
+    }
+
+    it("does not delete a non-empty dir") {
+      withFFS { fs =>
+        fs mkdir "/boo"
+        fs touch "/boo/far"
+        assert(! (fs rm "/boo"))
+        val filesAfter = fs ls "/"
+        assert(filesAfter contains Directory("boo"))
+      }
+    }
+  }
+
 }
 
