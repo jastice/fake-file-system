@@ -171,5 +171,19 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
     }
   }
 
+  describe("append") {
+    it("doesn't change anything appending empty array") {
+      fail
+    }
+
+    it("changes file size") {
+      fail
+    }
+
+    it("reduces free blocks") {
+      fail
+    }
+  }
+
 }
 

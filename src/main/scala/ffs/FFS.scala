@@ -1,6 +1,7 @@
 package ffs
 
 import java.io.{File => JFile}
+import java.nio.ByteBuffer
 
 import ffs.impl._
 import ffs.common.constants
@@ -111,11 +112,57 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
     }
   }
 
+
+  /** Append bytes to a file. Must not be a directory. */
+  def append(path: String, bytes: Array[Byte]): Unit = {
+    import constants.BLOCKSIZE
+
+    val filePath = Path(path)
+    mutateWithIO { io =>
+      val Some(fileEntry) = fileFromRoot(io,filePath) // YOLO
+      require(!fileEntry.deleted, s"file '$path' does not exist")
+      require(!fileEntry.dir, s"cannot append to '$path' because it is a directory")
+
+      val fileBlock = FileBlock(io.getBlock(fileEntry.address))
+
+      val lastBlockFilled = fileBlock.fileSize % BLOCKSIZE
+      val availableBytes = BLOCKSIZE - lastBlockFilled
+      val bytesNeedBlocks = bytes.length - availableBytes
+      val blocksNeeded = common.ceilingDiv(bytesNeedBlocks, BLOCKSIZE)
+      val blocksToFill = freeMap.takeBlocks(blocksNeeded)
+
+      val initialUpdatedBlock =
+        if (fileBlock.fileSize > 0) {
+          val firstBlockIndex = fileBlock.dataBlocks.last
+          val firstBlock = DataBlock(io.getBlock(firstBlockIndex))
+          val firstBlockBuffer = ByteBuffer.wrap(firstBlock.data)
+          firstBlockBuffer.position()
+          firstBlockBuffer.position(lastBlockFilled + 1)
+          firstBlockBuffer.put(bytes, 0, availableBytes)
+          Vector((firstBlockIndex,DataBlock(firstBlockBuffer.array())))
+        } else Vector.empty[(Int,DataBlock)]
+
+      val updatedBlocks = initialUpdatedBlock ++
+        blocksToFill.foldLeft((Vector.empty[(Int,DataBlock)], availableBytes+1)) { case ((acc,bytesOffset),blockIndex) =>
+          val block = DataBlock(io.getBlock(blockIndex))
+          ByteBuffer.wrap(block.data).put(bytes, bytesOffset, BLOCKSIZE min (bytes.length-bytesOffset))
+          (acc :+ (blockIndex,block), bytesOffset+BLOCKSIZE)
+        }._1
+
+      io.writeBlocks(updatedBlocks)
+    }
+  }
+
+  /** Read bytes from a file in given range of byte indices. */
+  def read(path: String, range: (Int,Int)): Array[Byte] = {
+    ???
+  }
+
   /** Find an entry slot at `path` and create a file or directory for the name part of path. */
   private def createFile(path: Path, dir: Boolean): Option[FileEntry] = {
 
-    val parentPath = path.parts.init
-    val name = path.parts.last
+    val parentPath = path.parent
+    val name = path.name
 
     val fileBlockAddress = freeMap.takeBlocks(1).head // YOLO
     // FIXME handle error: no free block to take
@@ -125,7 +172,7 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
 
       // TODO proper error on non-existent directory
       val (parentBlockAddress, parentBlock) =
-        if (parentPath.isEmpty) (0,header)
+        if (parentPath.isRoot) (0,header)
         else {
           val parentEntry = fileFromRoot(io, Path(path.parts.init)).get // YOLO
           (parentEntry.address, DirectoryIndexBlock(io.getBlock(parentEntry.address)))
