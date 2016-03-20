@@ -12,6 +12,42 @@ This project requires SBT 0.13
     > sbt console
     
 On the sbt console, you are provided an `fs` object that you can run some commands on.
+All file system commands expect absolute paths. There is an empty default file called "foo" in the FFS.
+
+Create a file
+
+    scala> fs touch "/hello"
+    res0: Boolean = true
+    
+Create a directory
+    
+    scala> fs mkdir "/bdauh"
+    res1: Boolean = true
+    
+with a subdirectory
+
+    scala> fs mkdir "/bdauh/augh"
+    res3: Boolean = true
+    
+List files in root
+
+    scala> fs ls "/"
+    res4: Seq[ffs.FileNode] = Vector(File(foo), File(hello), Directory(bdauh))
+    
+Write into a file
+
+    scala> fs.append("/hello", "Hello World!".getBytes)
+    
+Read the contents
+    
+    scala> new String(fs.read("/hello", 0, fs size "/hello"))
+    res5: String = Hello World!
+
+Delete the file
+
+    scala> fs rm "/hello"
+    res6: Boolean = true
+    
 
 ## File system format
 
