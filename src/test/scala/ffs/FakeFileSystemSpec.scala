@@ -271,7 +271,8 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
     it("reads chunk of data larger than a block") {
       withFFS { fs =>
         fs touch "/hula"
-        val bytes = Array.fill[Byte](constants.BLOCKSIZE + 13)(1.toByte)
+        val bytes = Array.ofDim[Byte](constants.BLOCKSIZE + 13)
+        Random.nextBytes(bytes)
         fs.append("/hula", bytes)
 
         val readAll = fs.read("/hula", 0, bytes.length)
@@ -295,7 +296,22 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
     }
 
     it("fails on out-of-bounds parameters") {
-      fail
+      withFFS { fs =>
+        fs touch "/alog"
+        fs.append("/alog", Array.fill(23)(7.toByte))
+
+        intercept[IllegalArgumentException] {
+          fs.read("/alog", -2, 11)
+        }
+
+        intercept[IllegalArgumentException] {
+          fs.read("/alog", 13, 1)
+        }
+
+        intercept[IllegalArgumentException] {
+          fs.read("/alog", 133, 198)
+        }
+      }
     }
   }
 
