@@ -134,13 +134,13 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
 
       val (consumedBytes, initialUpdatedBlock) =
         if (fileBlock.dataBlocks.nonEmpty) {
-          val lastBlockFilled = fileBlock.fileSize % BLOCKSIZE
-          val availableBytes = BLOCKSIZE - lastBlockFilled
+          val lastBlockFilledBytes = fileBlock.fileSize % BLOCKSIZE
+          val availableBytes = (BLOCKSIZE - lastBlockFilledBytes) min bytes.length
 
           val firstBlockIndex = fileBlock.dataBlocks.last
           val firstBlock = DataBlock(io.getBlock(firstBlockIndex))
           val firstBlockBuffer = ByteBuffer.wrap(firstBlock.data)
-          firstBlockBuffer.position(lastBlockFilled)
+          firstBlockBuffer.position(lastBlockFilledBytes)
           firstBlockBuffer.put(bytes, 0, availableBytes)
 
 
@@ -156,10 +156,11 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
         fileSize = fileBlock.fileSize + bytes.length)
 
       val updatedBlocks = Vector((fileEntry.address, updatedFileBlock)) ++ initialUpdatedBlock ++
-        blocksToFill.foldLeft((Vector.empty[(Int,DataBlock)], consumedBytes+1)) { case ((acc,bytesOffset),blockIndex) =>
+        blocksToFill.foldLeft((Vector.empty[(Int,DataBlock)], consumedBytes)) { case ((acc,bytesOffset),blockIndex) =>
           val block = DataBlock(io.getBlock(blockIndex))
-          ByteBuffer.wrap(block.data).put(bytes, bytesOffset, BLOCKSIZE min (bytes.length-bytesOffset))
-          (acc :+ (blockIndex,block), bytesOffset+BLOCKSIZE)
+          val consume = BLOCKSIZE min (bytes.length-bytesOffset)
+          ByteBuffer.wrap(block.data).put(bytes, bytesOffset, consume)
+          (acc :+ (blockIndex,block), bytesOffset+consume)
         }._1
 
       io.writeBlocks(updatedBlocks)
@@ -235,7 +236,7 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
           (address, updatedDirBlock, parent)
       }
       .orElse {
-        // create a new dirblock
+        // create a new dir block
         if (parent.blockCount < parent.maxBlockCount) {
           val newDirBlockAddress = freeMap.takeBlocks(1).head // YOLO
           val newDirBlock = DirectoryBlock(Vector(fileEntry))

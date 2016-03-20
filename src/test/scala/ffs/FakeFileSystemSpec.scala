@@ -207,7 +207,19 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       }
     }
 
-    it("appends multiple times") {
+    it("appends smaller chunks multiple times") {
+      withFFS{ fs =>
+        val bytes = Array.fill(23)(17.toByte)
+        fs touch "/silly"
+        val sizeBefore = fs size "/silly"
+        fs.append("/silly", bytes)
+        fs.append("/silly", bytes)
+        assert((fs size "/silly") == sizeBefore + bytes.length + bytes.length)
+      }
+
+    }
+
+    it("appends larger chunks multiple times") {
       withFFS{ fs =>
         val bytes0 = Array.fill(513)(17.toByte)
         val bytes1 = Array.fill(713)(23.toByte)
