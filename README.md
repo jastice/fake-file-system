@@ -1,6 +1,7 @@
 # Fake File System
 
 A virtual file system. Maps data operations onto a file system inside a single file.
+This is a toy implementation and not intended for any practical use.
 
 
 ## Building
@@ -24,7 +25,7 @@ Create a directory
     scala> fs mkdir "/bdauh"
     res1: Boolean = true
     
-with a subdirectory
+With a subdirectory
 
     scala> fs mkdir "/bdauh/augh"
     res3: Boolean = true
