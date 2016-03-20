@@ -100,11 +100,12 @@ object FreeMap {
   /** Read FreeMap from IO.
     *
     * @param io IO
-    * @param size data blocks in the FreeMap
+    * @param size size of file system in blocks
     */
   def apply(io: IO, size: Int): FreeMap = {
     // hard-coded assumption: freemap always begins at block 1
-    val blocks = (1 to size).map { i =>
+    val nFreeMapBlocks = freeMapBlocksFromSize(size)
+    val blocks = (1 to nFreeMapBlocks).map { i =>
       DataBlock(io.getBlock(i))
     }.toVector
 
@@ -118,7 +119,7 @@ object FreeMap {
     */
   def apply(size: Int) = {
 
-    val nFreeMapBlocks = common.ceilingDiv(size, BLOCK_BITS)
+    val nFreeMapBlocks = freeMapBlocksFromSize(size)
 
     val freeMapBlocks = Vector.fill(nFreeMapBlocks)(DataBlock(Array.ofDim[Byte](BLOCKSIZE)))
     val reservedBlocks = 1 + freeMapBlocks.size // header block + FreeMap itself
@@ -128,6 +129,8 @@ object FreeMap {
 
     freeMap
   }
+
+  def freeMapBlocksFromSize(size: Int) = common.ceilingDiv(size, BLOCK_BITS)
 
   def blockAddress(address: Int): (Int,Int) = (address / BLOCK_BITS, address % BLOCK_BITS)
 

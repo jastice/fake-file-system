@@ -30,13 +30,30 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
   describe("opening an existing filesystem") {
     it("reads the same blocks that were written") {
       withFile { file =>
-        val fs1 = FFS(file, 1024 * 512)
-        val fs2 = FFS(file, 1024 * 512)
+        val fs1 = FFS.initialize(file, 1024 * 512)
+        val fs2 = FFS.open(file)
 
         assert(fs1.header == fs2.header)
+
+        val blockzip = fs1.freeMap.blocks.zip(fs2.freeMap.blocks)
+        assert(blockzip.forall {case (b1,b2) => b1.data sameElements b2.data})
       }
     }
-    // TODO reading existent files, writing new files
+
+    it("allows modifications") {
+      withFile { file =>
+        FFS.initialize(file, 1024 * 512)
+        val fs2 = FFS.open(file)
+        assert(fs2 touch "/bozz")
+        assert(fs2 ls "/" contains File("bozz"))
+      }
+    }
+  }
+
+  describe("concurrent use of filesystem") {
+    it("is threadsafe") {
+      fail
+    }
   }
 
   describe("touch") {

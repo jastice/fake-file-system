@@ -339,7 +339,7 @@ object FFS {
     * @param size size in bytes. Actual size will be rounded up to the next highest multiple of blockSize (512)
     * @return
     */
-  private def initialize(physical: JFile, size: Int): FFS = {
+  private[ffs] def initialize(physical: JFile, size: Int): FFS = {
     import constants.BLOCKSIZE, common.ceilingDiv
 
     require(!physical.isFile, s"file '$physical' already exists, will not initialize.")
@@ -379,7 +379,7 @@ object FFS {
     * @param physical underlying file for the FFS
     * @return
     */
-  private def open(physical: JFile): FFS = {
+  private[ffs] def open(physical: JFile): FFS = {
     require(physical.isFile, s"'$physical' is not a regular file.")
 
     IO.withIO(physical) { io =>
