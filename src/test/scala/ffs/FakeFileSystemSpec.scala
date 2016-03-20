@@ -4,6 +4,8 @@ import ffs.common.constants
 import ffs.impl.{DirectoryIndexBlock, DirectoryBlock}
 import org.scalatest.{FunSpec, SequentialNestedSuiteExecution}
 
+import scala.util.Random
+
 class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
   describe("Creating a filesystem") {
     it("initializing empty fs") {
@@ -229,6 +231,71 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
         fs.append("/silly", bytes1)
         assert((fs size "/silly") == sizeBefore + bytes0.length + bytes1.length)
       }
+    }
+  }
+
+  describe("read") {
+
+    it("reads nothing from an empty file") {
+      withFFS { fs =>
+        fs touch "/hula"
+        val out = fs.read("/hula", 0, 0)
+        assert(out.isEmpty)
+      }
+    }
+
+    it("reads a few written bytes") {
+      withFFS { fs =>
+        fs touch "/hula"
+        val bytes = Array.ofDim[Byte](23)
+        Random.nextBytes(bytes)
+        fs.append("/hula", bytes)
+
+        val readAll = fs.read("/hula", 0, bytes.length)
+        assert(readAll.toVector == bytes.toVector)
+      }
+    }
+
+    it("reads chunk of written data") {
+      withFFS { fs =>
+        fs touch "/hula"
+        val bytes = Array.ofDim[Byte](101)
+        Random.nextBytes(bytes)
+        fs.append("/hula", bytes)
+
+        val readAll = fs.read("/hula", 0, bytes.length)
+        assert(readAll sameElements bytes)
+      }
+    }
+
+    it("reads chunk of data larger than a block") {
+      withFFS { fs =>
+        fs touch "/hula"
+        val bytes = Array.fill[Byte](constants.BLOCKSIZE + 13)(1.toByte)
+        fs.append("/hula", bytes)
+
+        val readAll = fs.read("/hula", 0, bytes.length)
+        assert(readAll.toVector == bytes.toVector)
+      }
+    }
+
+    it("reads correct slices of written data") {
+      withFFS { fs =>
+        fs touch "/hula"
+        val bytes = Array.ofDim[Byte](constants.BLOCKSIZE*4 + 101)
+        Random.nextBytes(bytes)
+        fs.append("/hula", bytes)
+
+        val readAll = fs.read("/hula", 0, bytes.length)
+        assert(readAll sameElements bytes)
+
+        val readSlice = fs.read("/hula", 13, bytes.length - constants.BLOCKSIZE)
+        assert(readSlice sameElements bytes.slice(13, bytes.length - constants.BLOCKSIZE))
+      }
+    }
+
+    it("fails on out-of-bounds parameters") {
+      fail
     }
   }
 

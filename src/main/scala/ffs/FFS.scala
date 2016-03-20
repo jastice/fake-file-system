@@ -167,9 +167,44 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
     }
   }
 
-  /** Read bytes from a file in given range of byte indices. */
-  def read(path: String, range: (Int,Int)): Array[Byte] = {
-    ???
+  /** Read bytes from a file in given range of byte indices.
+    * The range is [from,to) - from inclusive, to exclusive
+    */
+  def read(path: String, from: Int, to: Int): Array[Byte] = {
+    import constants.BLOCKSIZE
+    require(from >= 0, s"from-index must be positive. Was $from")
+    require(to >= from, s"to-index ($to) must be at least from-index ($from)")
+
+    val filePath = Path(path)
+    val size = to - from
+
+    val fromBlockIndex = from / BLOCKSIZE
+    val toBlockIndex = (to / BLOCKSIZE) + 1
+    val startOffset = from % BLOCKSIZE
+
+
+    readWithIO { io =>
+      val Some(fileEntry) = fileFromRoot(io,filePath) // YOLO
+      require(!fileEntry.deleted, s"file '$path' does not exist")
+      require(!fileEntry.dir, s"cannot append to '$path' because it is a directory")
+
+      val fileBlock = FileBlock(io.getBlock(fileEntry.address))
+      require(to <= fileBlock.fileSize, s"to position ($to) was greater than file size (${fileBlock.fileSize}")
+
+      val out = ByteBuffer.allocate(size)
+
+      fileBlock.dataBlocks
+        .slice(fromBlockIndex, toBlockIndex)
+        .foldLeft(startOffset) { (offset,address) =>
+            val blockData = io.getBlock(address)
+            blockData.position(offset)
+            if (out.remaining() >= blockData.remaining()) out.put(blockData)
+            else blockData.get(out.array(), out.arrayOffset() + out.position(), out.remaining())
+            0
+        }
+
+      out.array()
+    }
   }
 
   /** Find an entry slot at `path` and create a file or directory for the name part of path. */
