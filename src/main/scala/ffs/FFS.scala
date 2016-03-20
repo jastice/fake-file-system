@@ -4,20 +4,23 @@ import java.io.{File => JFile}
 import java.nio.ByteBuffer
 
 import ffs.impl._
+import manipulation._
 import ffs.common.constants
 import FFS._
 
 /**
   * The Fake File System.
   *
-  * Currently not thread-safe. Possible solution: make operations synchronized, check for / wait on file locks,
-  * have only one instance per physical file.
+  * Because it operates on physical files with strict evaluation semantics,
+  * we can't really achieve thread-safety by immutability. Instead, we use file locks to block other processes
+  * from accessing the file externally (hopefully) and have only one instance per physical file. This is ensured by a
+  * private constructor and factory methods.
   */
 class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private[ffs] val freeMap: FreeMap) {
 
 
   /** List all files within `path`. If path is a file, list that. */
-  def ls(path: String): Seq[FileNode] = {
+  def ls(path: String): Seq[FileNode] = this.synchronized {
     val filePath = Path(path)
     require(paths.valid(filePath), "not a valid path (filename too long?)")
 
@@ -46,7 +49,7 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
   }
 
   /** Size of file. Always 0 for directories. */
-  def size(path: String): Int = {
+  def size(path: String): Int = this.synchronized {
     val filePath = Path(path)
     readWithIO { io =>
       val Some(fileEntry) = fileFromRoot(io, filePath) // YOLO
@@ -56,19 +59,17 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
   }
 
   /** Create directory in at path. Path must be directory itself. */
-  def mkdir(path: String): Boolean =
+  def mkdir(path: String): Boolean = this.synchronized {
     createFile(Path(path), dir = true).isDefined
+  }
 
   /** Create empty file at path. */
-  def touch(path: String): Boolean =
+  def touch(path: String): Boolean = this.synchronized {
     createFile(Path(path), dir = false).isDefined
-
-  def cp(from: String, to: String): Unit = ???
-
-  def mv(from: String, to: String): Unit = ???
+  }
 
   /** Delete a file. */
-  def rm(path: String): Boolean = {
+  def rm(path: String): Boolean = this.synchronized {
     val filePath = Path(path)
     val name = filePath.name
 
@@ -121,7 +122,7 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
 
 
   /** Append bytes to a file. Must not be a directory. */
-  def append(path: String, bytes: Array[Byte]): Unit = {
+  def append(path: String, bytes: Array[Byte]): Unit = this.synchronized {
     import constants.BLOCKSIZE
 
     val filePath = Path(path)
@@ -170,7 +171,7 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
   /** Read bytes from a file in given range of byte indices.
     * The range is [from,to) - from inclusive, to exclusive
     */
-  def read(path: String, from: Int, to: Int): Array[Byte] = {
+  def read(path: String, from: Int, to: Int): Array[Byte] = this.synchronized {
     import constants.BLOCKSIZE
     require(from >= 0, s"from-index must be positive. Was $from")
     require(to >= from, s"to-index ($to) must be at least from-index ($from)")
@@ -305,16 +306,15 @@ object FFS {
     * Open an existing FFS or create a new one with given size.
     */
   def apply(physical: JFile, size: Int): FFS =
-    if (physical.isFile) open(physical)
-    else initialize(physical, size)
+    if (physical.isFile) FFSCache(physical, open(physical))
+    else FFSCache(physical, initialize(physical, size))
 
   /**
-    *
     * @param physical "physical" file system file
     * @param size size in bytes. Actual size will be rounded up to the next highest multiple of blockSize (512)
     * @return
     */
-  def initialize(physical: JFile, size: Int): FFS = {
+  private def initialize(physical: JFile, size: Int): FFS = {
     import constants.BLOCKSIZE, common.ceilingDiv
 
     require(!physical.isFile, s"file '$physical' already exists, will not initialize.")
@@ -354,7 +354,7 @@ object FFS {
     * @param physical underlying file for the FFS
     * @return
     */
-  def open(physical: JFile): FFS = {
+  private def open(physical: JFile): FFS = {
     require(physical.isFile, s"'$physical' is not a regular file.")
 
     IO.withIO(physical) { io =>
@@ -362,42 +362,6 @@ object FFS {
       val freemap = FreeMap(io, header.blockCount)
       new FFS(physical, header, freemap)
     }
-  }
-
-  /** Non-deleted file entries in directory blocks. */
-  private def fileEntries(io: IO)(addresses: Vector[Int]): Vector[FileEntry] = {
-    addresses
-      .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
-      .filter(!_.deleted)
-  }
-
-
-  /** Get the file entry describing the file referenced by `path` among `addresses`, recursively. */
-  private def fileForPath(io: IO)(addresses: Vector[Int], path: Vector[String]): Option[FileEntry] = {
-    if (path.isEmpty) None
-    else {
-      val name = path.head
-      addresses
-        .flatMap { a => DirectoryBlock(io.getBlock(a)).files }
-        .find { case entry => !entry.deleted && entry.name == name }
-        .flatMap { case entry =>
-          val restPath = path.tail
-          if (restPath.nonEmpty) {
-            if (entry.dir) {
-              val block = DirectoryIndexBlock(io.getBlock(entry.address))
-              fileForPath(io)(block.blockAddresses, restPath)
-            } else None // not a dir here, can't complete path recursion
-          }
-          else Some(entry)
-        }
-    }
-  }
-
-  /** Find directory block containing file with `name`. */
-  private def dirBlockForName(io: IO, addresses: Vector[Int], name: String): Option[(Int,DirectoryBlock)] = {
-    addresses.iterator
-      .map { a => (a, DirectoryBlock(io.getBlock(a))) }
-      .find { case (address,dirBlock) => dirBlock.files.exists(_.name == name) }
   }
 
 }

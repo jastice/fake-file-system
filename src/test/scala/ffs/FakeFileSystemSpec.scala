@@ -10,7 +10,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
   describe("Creating a filesystem") {
     it("initializing empty fs") {
       withFile { file =>
-        FFS.initialize(file, 1024*512)
+        FFS(file, 1024*512)
 
         assert(file.exists)
         assert(file.isFile)
@@ -19,7 +19,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
 
     it("contains the default 'foo' file") {
       withFile { file =>
-        val fs = FFS.initialize(file, 1024*512)
+        val fs = FFS(file, 1024*512)
         val filesInRoot = fs.ls("/")
 
         assert(filesInRoot.contains(File("foo")))
@@ -30,8 +30,8 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
   describe("opening an existing filesystem") {
     it("reads the same blocks that were written") {
       withFile { file =>
-        val fs1 = FFS.initialize(file, 1024 * 512)
-        val fs2 = FFS.open(file)
+        val fs1 = FFS(file, 1024 * 512)
+        val fs2 = FFS(file, 1024 * 512)
 
         assert(fs1.header == fs2.header)
       }
