@@ -22,7 +22,7 @@ Block types:
 
 * header block - just one block at the beginning of the file (address 0). Contains metadata and addresses of root directory.
 * directory index block - references directory blocks
-* directory block - contains file entries (filename and metadata). these can be directories or actual files
+* directory block - contains file entries (filename and metadata). These can be directories or actual files
 * file block - references to actual file data blocks
 * data block - raw data for files
 
@@ -31,14 +31,15 @@ Block types:
 * Blocks have an integer address, so at most we can save Int.MaxValue * 512 bytes in a Fake File System.
 * Files have only one block for their addresses, so max file size is limited to a little less than 64k and files in a directory are limited to at most 4032
 * file names are at most 8 bytes
-* not thread-safe: multiple instances of an FFS can be created for the same file. As they cache data, it can become out of sync easily.
 * performance was not a consideration in the design
+* the API is pretty basic
 
 
 ## Design
 
 The user facing API is the FFS class/object, which allows opens a FFS from a physical file, and allows some basic
-operations. All operations are directly reflected in the underlying file.
+operations. All operations are directly reflected in the underlying file. Bad parameters and errors are mostly signaled
+through exceptions instead of types and return values :(
 
 ### Thread safety
 

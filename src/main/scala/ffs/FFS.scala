@@ -22,7 +22,6 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
   /** List all files within `path`. If path is a file, list that. */
   def ls(path: String): Seq[FileNode] = this.synchronized {
     val filePath = Path(path)
-    require(paths.valid(filePath), "not a valid path (filename too long?)")
 
 
     readWithIO { io =>
@@ -52,49 +51,57 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
   def size(path: String): Int = this.synchronized {
     val filePath = Path(path)
     readWithIO { io =>
-      val Some(fileEntry) = fileFromRoot(io, filePath) // YOLO
+      val fileEntryOpt = fileFromRoot(io, filePath)
+      require(fileEntryOpt.isDefined)
+      val fileEntry = fileEntryOpt.get
       if (fileEntry.dir) 0
       else FileBlock(io.getBlock(fileEntry.address)).fileSize
     }
   }
 
-  /** Create directory in at path. Path must be directory itself. */
+  /** Create directory in at path. Path must be directory itself.
+    *
+    * @return true iff directory was created
+    */
   def mkdir(path: String): Boolean = this.synchronized {
     createFile(Path(path), dir = true).isDefined
   }
 
-  /** Create empty file at path. */
+  /** Create empty file at path.
+    *
+    * @return true iff file was created
+    */
   def touch(path: String): Boolean = this.synchronized {
     createFile(Path(path), dir = false).isDefined
   }
 
-  /** Delete a file. */
+  /**
+    * Delete a file.
+    *
+    * @return true iff file exists and was deleted
+    */
   def rm(path: String): Boolean = this.synchronized {
     val filePath = Path(path)
     val name = filePath.name
 
     mutateWithIO { io =>
 
-      if (filePath.isRoot) {
-        // can't delete root
-        false
-      } else {
-
-        val parentBlock =
-          if (filePath.parent.isRoot) header
-          else {
-            val parentEntry = fileFromRoot(io, filePath.parent).get // YOLO path might not exist
+      val deleted = for {
+        parentBlock <-
+          if (filePath.isRoot) None // can't delete root
+          else if (filePath.parent.isRoot) Some(header)
+          else fileFromRoot(io, filePath.parent).map { parentEntry =>
             val parentBlockBytes = io.getBlock(parentEntry.address)
             DirectoryIndexBlock(parentBlockBytes)
           }
-        val Some((dirBlockAddress,dirBlock)) = dirBlockForName(io, parentBlock.blockAddresses, name) // YOLO name might not exist in path
-        val fileEntryIndex = dirBlock.files.indexWhere(_.name == name)
-        val fileEntry = dirBlock.files(fileEntryIndex) // YOLO entry *should* exist if above didn't fail, but ...
-        val fileBlockBytes = io.getBlock(fileEntry.address)
 
-        // TODO fix all the YOLO above
+        (dirBlockAddress, dirBlock) <- dirBlockForName(io, parentBlock.blockAddresses, name)
+        fileEntryIndex = dirBlock.files.indexWhere(_.name == name) if fileEntryIndex >= 0
+        fileEntry = dirBlock.files(fileEntryIndex)
+        fileBlockBytes = io.getBlock(fileEntry.address)
 
-        val toFree = if (fileEntry.dir) {
+        freeUs <-
+        if (fileEntry.dir) {
           // can only delete if all content files are already marked deleted
           val block = DirectoryIndexBlock(fileBlockBytes)
           val canDelete = block.blockAddresses.forall { a =>
@@ -108,15 +115,15 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
           val block = FileBlock(fileBlockBytes)
           Some(block.dataBlocks)
         }
-
-        toFree.exists { freeUs =>
-          freeMap.freeBlocks(freeUs :+ fileEntry.address)
-          val updatedFileEntry = fileEntry.copy(deleted = true)
-          val updatedDirBlock = dirBlock.copy(files = dirBlock.files.updated(fileEntryIndex, updatedFileEntry))
-          io.writeBlock(dirBlockAddress, updatedDirBlock)
-          true
-        }
+      } yield {
+        freeMap.freeBlocks(freeUs :+ fileEntry.address)
+        val updatedFileEntry = fileEntry.copy(deleted = true)
+        val updatedDirBlock = dirBlock.copy(files = dirBlock.files.updated(fileEntryIndex, updatedFileEntry))
+        io.writeBlock(dirBlockAddress, updatedDirBlock)
+        true
       }
+
+      deleted.isDefined
     }
   }
 
@@ -126,8 +133,12 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
     import constants.BLOCKSIZE
 
     val filePath = Path(path)
+    require(!filePath.isRoot, "/ is not a file you can append to")
+
     mutateWithIO { io =>
-      val Some(fileEntry) = fileFromRoot(io,filePath) // YOLO
+      val fileEntryOpt = fileFromRoot(io,filePath)
+      require(fileEntryOpt.isDefined, s"file $path does not exist")
+      val fileEntry = fileEntryOpt.get
       require(!fileEntry.deleted, s"file '$path' does not exist")
       require(!fileEntry.dir, s"cannot append to '$path' because it is a directory")
 
@@ -177,15 +188,16 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
     require(to >= from, s"to-index ($to) must be at least from-index ($from)")
 
     val filePath = Path(path)
-    val size = to - from
 
+    val size = to - from
     val fromBlockIndex = from / BLOCKSIZE
     val toBlockIndex = (to / BLOCKSIZE) + 1
     val startOffset = from % BLOCKSIZE
 
-
     readWithIO { io =>
-      val Some(fileEntry) = fileFromRoot(io,filePath) // YOLO
+      val fileEntryOpt = fileFromRoot(io,filePath) // YOLO
+      require(fileEntryOpt.isDefined, s"file '$path' does not exist")
+      val fileEntry = fileEntryOpt.get
       require(!fileEntry.deleted, s"file '$path' does not exist")
       require(!fileEntry.dir, s"cannot append to '$path' because it is a directory")
 
@@ -214,32 +226,31 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
     val parentPath = path.parent
     val name = path.name
 
-    val fileBlockAddress = freeMap.takeBlocks(1).head // YOLO
-    // FIXME handle error: no free block to take
-    // FIXME release block in error case
-
     mutateWithIO { io =>
 
-      // TODO proper error on non-existent directory
-      val (parentBlockAddress, parentBlock) =
-        if (parentPath.isRoot) (0,header)
-        else {
-          val parentEntry = fileFromRoot(io, Path(path.parts.init)).get // YOLO
-          (parentEntry.address, DirectoryIndexBlock(io.getBlock(parentEntry.address)))
-        }
+      val fileBlockAddressOpt = freeMap.takeBlocks(1).headOption
 
-      val fileBlock =
-        if (dir) DirectoryIndexBlock(parentBlockAddress,Vector(),0)
-        else FileBlock(parentBlockAddress, Vector(), 0)
-      val fileEntry = FileEntry(name, dir = dir, deleted = false, fileBlockAddress)
+      val resultEntry = for {
+        fileBlockAddress <- fileBlockAddressOpt
+        (parentBlockAddress, parentBlock) <-
+          if (parentPath.isRoot) Some((0,header))
+          else fileFromRoot(io, Path(path.parts.init)).map { parentEntry =>
+            (parentEntry.address, DirectoryIndexBlock(io.getBlock(parentEntry.address)))
+          }
 
-      val updates = findOrCreateBlockAndUpdateEntry(io, parentBlock, fileEntry)
+        fileBlock =
+          if (dir) DirectoryIndexBlock(parentBlockAddress,Vector(),0)
+          else FileBlock(parentBlockAddress, Vector(), 0)
 
-      updates.map { case (updatedBlockAddress, updatedBlock, updatedParent) =>
+        fileEntry = FileEntry(name, dir = dir, deleted = false, fileBlockAddress)
+
+        (updatedBlockAddress, updatedBlock, updatedParent) <- findOrCreateBlockAndUpdateEntry(io, parentBlock, fileEntry)
+
+      } yield {
         io.writeBlock(updatedBlockAddress, updatedBlock)
         io.writeBlock(fileBlockAddress, fileBlock)
         if (updatedParent != parentBlock) {
-          // this block YOLO
+          // this block kind of YOLO but it's probably fine
           if (parentBlockAddress == 0) {
             header = updatedParent.asInstanceOf[HeaderBlock]
             io.writeBlock(parentBlockAddress,header)
@@ -248,6 +259,13 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
         }
         fileEntry
       }
+
+      resultEntry.orElse {
+        // release possibly taken block because there was error
+        fileBlockAddressOpt.foreach(a => freeMap.freeBlocks(Vector(a)))
+        None
+      }
+
     }
   }
 
@@ -274,10 +292,16 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
       .orElse {
         // create a new dir block
         if (parent.blockCount < parent.maxBlockCount) {
-          val newDirBlockAddress = freeMap.takeBlocks(1).head // YOLO
-          val newDirBlock = DirectoryBlock(Vector(fileEntry))
-          val updatedIndex = parent.addDirBlock(newDirBlockAddress)
-          Some((newDirBlockAddress, newDirBlock, updatedIndex))
+          val newDirBlockAddressOpt = freeMap.takeBlocks(1).headOption
+          newDirBlockAddressOpt.map { newDirBlockAddress =>
+            val newDirBlock = DirectoryBlock(Vector(fileEntry))
+            val updatedIndex = parent.addDirBlock(newDirBlockAddress)
+            (newDirBlockAddress, newDirBlock, updatedIndex)
+          }.orElse {
+            // cleanup
+            newDirBlockAddressOpt.foreach(a => freeMap.freeBlocks(Vector(a)))
+            None
+          }
         }
         else None
       }
