@@ -234,8 +234,9 @@ class FFS private(physical: JFile, private[ffs] var header: HeaderBlock, private
         fileBlockAddress <- fileBlockAddressOpt
         (parentBlockAddress, parentBlock) <-
           if (parentPath.isRoot) Some((0,header))
-          else fileFromRoot(io, Path(path.parts.init)).map { parentEntry =>
-            (parentEntry.address, DirectoryIndexBlock(io.getBlock(parentEntry.address)))
+          else fileFromRoot(io, Path(path.parts.init)).flatMap { parentEntry =>
+            if (parentEntry.dir) Some((parentEntry.address, DirectoryIndexBlock(io.getBlock(parentEntry.address))))
+            else None
           }
 
         fileBlock =

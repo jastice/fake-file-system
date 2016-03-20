@@ -77,6 +77,19 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       }
     }
 
+    it("does not create a subdirectory to a file") {
+      withFFS { fs =>
+        assert(!(fs mkdir "/lassi/mango"))
+      }
+    }
+
+    it("does not create a subdirectory to a nonexistent path") {
+      withFFS { fs =>
+        assert(!(fs mkdir "/lassi/mango"))
+      }
+    }
+
+
     it("can create maximum number of subdirs in a dir") {
       val maxFiles = DirectoryIndexBlock.MAX_DIRECTORY_BLOCKS * DirectoryBlock.MAX_ENTRIES
       val testDir = "/testy"
