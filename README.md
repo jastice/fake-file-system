@@ -67,6 +67,7 @@ Block types:
 
 * Blocks have an integer address, so at most we can save Int.MaxValue * 512 bytes in a Fake File System.
 * Files have only one block for their addresses, so max file size is limited to a little less than 64k and files in a directory are limited to at most 4032
+* root directory is limited to 32 files or directories
 * file names are at most 8 bytes
 * performance was not a consideration in the design
 * the API is pretty basic

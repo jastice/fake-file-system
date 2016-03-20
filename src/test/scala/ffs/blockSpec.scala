@@ -10,18 +10,18 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
   * Created by jast on 05/03/2016.
   */
 //noinspection NameBooleanParameters
-class blockSpec extends FunSpec with GeneratorDrivenPropertyChecks{
+class blockSpec extends FunSpec with GeneratorDrivenPropertyChecks {
 
 
   describe("serialization / deserialization reversibility") {
 
     it("HeaderBlock") {
-      val block = HeaderBlock(3027,Vector(74,723,717,788))
+      val block = HeaderBlock(3027, Vector(74,723,717,788))
       assert(HeaderBlock(block.toBytes) == block)
     }
 
     it("FileBlock") {
-      val block = FileBlock(377,Vector(74,723,717,788,321),2400)
+      val block = FileBlock(377,Vector(74,723,717,788,321), 2400)
       assert(FileBlock(block.toBytes) == block)
     }
 

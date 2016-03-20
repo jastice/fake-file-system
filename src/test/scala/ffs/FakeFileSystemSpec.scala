@@ -1,12 +1,14 @@
 package ffs
 
 import ffs.common.constants
-import ffs.impl.{DirectoryIndexBlock, DirectoryBlock}
+import ffs.impl.{DirectoryBlock, DirectoryIndexBlock}
+import org.scalacheck.Gen
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FunSpec, SequentialNestedSuiteExecution}
 
 import scala.util.Random
 
-class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
+class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution with GeneratorDrivenPropertyChecks {
   describe("Creating a filesystem") {
     it("initializing empty fs") {
       withFile { file =>
@@ -52,7 +54,32 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
 
   describe("concurrent use of filesystem") {
     it("is threadsafe") {
-      fail
+      withFile { file =>
+        val fs = FFS(file, 1024*512)
+        val testRoot = "/testdir"
+        fs mkdir testRoot
+
+        forAll(Gen.identifier, Gen.identifier, workers(8)) { (str1: String, str2: String) =>
+          val dirname = str1.take(8)
+          val filename = str2.take(8)
+
+          whenever(dirname.nonEmpty && filename.nonEmpty) {
+            val dir = s"/$testRoot/$dirname/"
+            fs mkdir dir
+            assert(fs ls s"/$testRoot" contains Directory(dirname))
+            val touchme = s"/$dir/$filename"
+            fs touch touchme
+            assert(fs ls s"/$dir" contains File(filename))
+
+            val writeme = str1 + str2
+            fs.append(touchme, writeme.getBytes)
+            val readme = fs.read(touchme, 0, fs size touchme)
+
+            assert(new String(readme) contains writeme)
+          }
+        }
+      }
+
     }
   }
 
@@ -106,8 +133,7 @@ class FakeFileSystemSpec extends FunSpec with SequentialNestedSuiteExecution {
       }
     }
 
-
-    it("can create maximum number of subdirs in a dir") {
+    it("creates maximum number of subdirs in a nested dir") {
       val maxFiles = DirectoryIndexBlock.MAX_DIRECTORY_BLOCKS * DirectoryBlock.MAX_ENTRIES
       val testDir = "/testy"
       withFFS { fs =>
