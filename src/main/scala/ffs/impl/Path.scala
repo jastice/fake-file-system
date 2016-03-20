@@ -11,7 +11,7 @@ case class Path(parts: Vector[String]) {
 }
 
 object Path {
-  // TODO this is still subject to all kinds of wonky user abuse. let's just assume user only uses mostly valid paths.
+  // this is still subject to all kinds of wonky user abuse. let's just assume user only uses mostly valid paths.
   def apply(path: String): Path = {
     val parts = path.split('/').toVector.filter(_.nonEmpty)
     require(valid(parts), s"$path is not a valid path. filename too long?")
